@@ -67,9 +67,6 @@ export default async function RootLayout({
             <NavLink href="/assignments" icon="📝" text="Görev & Ödev" />
             <NavLink href="/sessions" icon="🤝" text="Seans Notları" />
             <NavLink href="/parents" icon="💬" text="Veli İletişimi" />
-            <div style={{ height: '1px', background: 'var(--border)', margin: '1rem 0' }} />
-            <p style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '0.5rem', paddingLeft: '1rem' }}>İş Yönetimi</p>
-            <NavLink href="/finances" icon="💰" text="Finans & Takvim" />
           </nav>
           
           <div style={{ marginTop: 'auto', padding: '1rem', background: 'var(--bg-main)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)' }}>

@@ -15,7 +15,6 @@ export default async function Home() {
       },
       psychoRecords: { orderBy: { date: 'desc' } },
       appointments: { orderBy: { date: 'asc' } },
-      finances: { orderBy: { date: 'desc' } },
       sessions: { select: { id: true } }
     }
   });
@@ -32,10 +31,7 @@ export default async function Home() {
     }).map(a => ({ ...a, student: s }))
   ).sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
-  // 2. Finance Alerts (Pending debts)
-  const pendingFinances = students.flatMap(s => 
-    s.finances.filter(f => f.status === 'PENDING').map(f => ({ ...f, student: s }))
-  );
+
 
   // 3. Psycho Alerts (Anxiety > 7 or Motivation < 4 in recent record)
   const psychoAlerts = students.filter(s => {
@@ -50,15 +46,7 @@ export default async function Home() {
     return s.exams[0].totalNet < s.exams[1].totalNet - 5;
   });
 
-  // 4.5. Prepaid Balance Alerts
-  const bakiyeKritikAlerts = students.map(s => {
-    const totalPaid = s.finances
-      .filter(f => f.type === 'PAYMENT' && f.status === 'PAID')
-      .reduce((sum, f) => sum + f.amount, 0);
-    const completedSessions = s.sessions.length;
-    const remaining = (totalPaid / 1500) - completedSessions;
-    return { student: s, remaining, totalPaid };
-  }).filter(item => item.remaining < 2);
+
 
   // 5. Parent Comm Alerts (> 14 days)
   const communicationAlerts = students.filter(s => {
@@ -142,12 +130,11 @@ export default async function Home() {
             Günaydın, Ahmet Bey. ☀️
           </h1>
           <p style={{ color: '#E2E8F0', fontSize: '1.1rem', maxWidth: '600px', lineHeight: 1.5 }}>
-            Bugün <strong>{todayAppts.length}</strong> öğrenciyle seansınız var. Dikkat etmeniz gereken <strong>{psychoAlerts.length + performanceAlerts.length + bakiyeKritikAlerts.length}</strong> akademik/psikolojik/finansal risk durumu tespit ettim.
+            Bugün <strong>{todayAppts.length}</strong> öğrenciyle seansınız var. Dikkat etmeniz gereken <strong>{psychoAlerts.length + performanceAlerts.length}</strong> akademik/psikolojik risk durumu tespit ettim.
           </p>
         </div>
         <div style={{ display: 'flex', gap: '1rem' }}>
           <Link href="/students" className="btn-primary" style={{ background: '#3B82F6', border: 'none', color: 'white', fontWeight: 600 }}>Öğrenci Envanteri</Link>
-          <Link href="/finances" className="btn-secondary" style={{ background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', color: 'white' }}>Takvim & Finans</Link>
         </div>
       </header>
 
@@ -187,7 +174,7 @@ export default async function Home() {
           
           <div className="card" style={{ borderLeft: '4px solid #F59E0B' }}>
             <h2 style={{ fontSize: '1.1rem', fontWeight: 800, color: '#F59E0B', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <span>🧠</span> Psikolojik, Akademik ve Finansal Uyarılar
+              <span>🧠</span> Psikolojik ve Akademik Uyarılar
             </h2>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
               {psychoAlerts.map(s => (
@@ -202,19 +189,13 @@ export default async function Home() {
                   <Link href={`/students/${s.id}`} style={{ fontWeight: 600, color: '#B91C1C' }}>İncele</Link>
                 </div>
               ))}
-              {bakiyeKritikAlerts.map(item => (
-                <div key={'bakiye-'+item.student.id} style={{ fontSize: '0.9rem', padding: '0.75rem', background: 'rgba(239, 68, 68, 0.1)', borderRadius: '4px', color: '#B91C1C', display: 'flex', justifyContent: 'space-between' }}>
-                  <span><strong>{item.student.firstName} {item.student.lastName}:</strong> [💳 Bakiye Kritik] Kalan Seans: <strong>{item.remaining.toFixed(1)}</strong> (Yapılan: {item.student.sessions.length}, Ödenen: {Math.round(item.totalPaid / 1500)} seans)</span>
-                  <Link href={`/students/${item.student.id}`} style={{ fontWeight: 600, color: '#B91C1C' }}>İncele</Link>
-                </div>
-              ))}
-              {psychoAlerts.length === 0 && performanceAlerts.length === 0 && bakiyeKritikAlerts.length === 0 && (
+              {psychoAlerts.length === 0 && performanceAlerts.length === 0 && (
                 <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>Şu an için kritik bir risk tespit edilmedi.</p>
               )}
             </div>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '1.5rem' }}>
             <div className="card" style={{ borderLeft: '4px solid #10B981' }}>
                <h2 style={{ fontSize: '1rem', fontWeight: 800, color: '#10B981', marginBottom: '1rem' }}>📞 Veli İletişimi Gecikenler</h2>
                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
@@ -225,19 +206,6 @@ export default async function Home() {
                    </div>
                  ))}
                  {communicationAlerts.length === 0 && <span style={{ fontSize: '0.85rem', color: 'var(--success)' }}>Tüm velilerle iletişim güncel.</span>}
-               </div>
-            </div>
-
-            <div className="card" style={{ borderLeft: '4px solid #EF4444' }}>
-               <h2 style={{ fontSize: '1rem', fontWeight: 800, color: '#EF4444', marginBottom: '1rem' }}>💰 Bekleyen Alacaklar (Finans)</h2>
-               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                 {pendingFinances.slice(0, 3).map(f => (
-                   <div key={'fin-'+f.id} style={{ fontSize: '0.85rem', display: 'flex', justifyContent: 'space-between', padding: '0.5rem', background: 'var(--bg-main)', borderRadius: '4px' }}>
-                     <span style={{ fontWeight: 600 }}>{f.student.firstName} ({f.title})</span>
-                     <span style={{ fontWeight: 800, color: '#EF4444' }}>₺{f.amount}</span>
-                   </div>
-                 ))}
-                 {pendingFinances.length === 0 && <span style={{ fontSize: '0.85rem', color: 'var(--success)' }}>Ödenmemiş borç bulunmuyor.</span>}
                </div>
             </div>
           </div>

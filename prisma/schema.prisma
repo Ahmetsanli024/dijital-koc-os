@@ -34,7 +34,6 @@ model Student {
   schedules   Schedule[]
   sessions    SessionNote[]
   parentComms ParentCommunication[]
-  finances    FinanceRecord[]
   appointments Appointment[]
   psychoRecords PsychologicalRecord[]
   badges      Badge[]
@@ -144,17 +143,7 @@ model ParentCommunication {
   student     Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
 }
 
-model FinanceRecord {
-  id          String   @id @default(cuid())
-  studentId   String
-  title       String
-  amount      Float
-  type        String   @default("PAYMENT") // PAYMENT, DEBT
-  status      String   @default("PAID")    // PAID, PENDING
-  date        DateTime @default(now())
-  
-  student     Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
-}
+
 
 model Appointment {
   id          String   @id @default(cuid())

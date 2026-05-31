@@ -1,17 +1,29 @@
 import React from 'react';
-import { getStudents, addStudent, deleteStudent } from '../actions/student';
+import { addStudent, deleteStudent } from '../actions/student';
+import prisma from '@/lib/prisma';
+import MudurRaporuButton from './MudurRaporuButton';
 
 export default async function StudentsPage() {
-  const students = await getStudents();
+  const students = await prisma.student.findMany({
+    orderBy: { firstName: 'asc' },
+    include: {
+      sessions: { orderBy: { date: 'desc' } },
+      exams: { orderBy: { date: 'desc' } },
+      schedules: { include: { tasks: true } }
+    }
+  });
 
   return (
     <main style={{ maxWidth: '1200px', margin: '0 auto', width: '100%' }}>
-      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '2.5rem' }}>
+      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2.5rem' }}>
         <div>
           <h1 style={{ fontSize: '2.2rem', fontWeight: 800, color: 'var(--text-primary)', marginBottom: '0.5rem', letterSpacing: '-0.03em' }}>
             Öğrenci Hafızası
           </h1>
           <p style={{ color: 'var(--text-secondary)', fontSize: '1rem' }}>Sisteme kayıtlı, aktif danışmanlık verdiğiniz tüm öğrencilerin profilleri.</p>
+        </div>
+        <div>
+          <MudurRaporuButton students={students} />
         </div>
       </header>
 
