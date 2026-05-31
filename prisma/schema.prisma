@@ -1,0 +1,182 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+model Student {
+  id          String   @id @default(cuid())
+  firstName   String
+  lastName    String
+  grade       String
+  target      String?
+  parentName  String?
+  parentPhone String?
+  notes       String?
+  learningStyle String?
+  psychoProfile String?
+  portalToken   String?  @unique
+  school      String?
+  field       String?  // LGS, SAY, EA, SOZ vb.
+  targetSchool String?
+  targetDepartment String?
+  targetCity  String?
+  targetNets  String?  // Örn: "Mat: 18, Fen: 19"
+  sinavzaLink String?
+  totalTargetSessions Int @default(36)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  exams       Exam[]
+  schedules   Schedule[]
+  sessions    SessionNote[]
+  parentComms ParentCommunication[]
+  finances    FinanceRecord[]
+  appointments Appointment[]
+  psychoRecords PsychologicalRecord[]
+  badges      Badge[]
+  books       Book[]
+}
+
+model PsychologicalRecord {
+  id          String   @id @default(cuid())
+  studentId   String
+  date        DateTime @default(now())
+  anxietyLevel Int     @default(5) // 1-10
+  motivationLevel Int  @default(5) // 1-10
+  focusLevel   Int     @default(5) // 1-10
+  coachNote    String?
+  
+  student     Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+}
+
+model Badge {
+  id          String   @id @default(cuid())
+  studentId   String
+  title       String
+  icon        String
+  dateAwarded DateTime @default(now())
+  
+  student     Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+}
+
+model Exam {
+  id          String   @id @default(cuid())
+  studentId   String
+  name        String
+  date        DateTime
+  totalNet    Float
+  totalCorrect Int?
+  totalIncorrect Int?
+  totalBlank  Int?
+  totalScore  Float?
+  rank        String?
+  rawText     String?
+  subjectDetails String?
+  examType    String   @default("SINGLE")
+  publisher   String?
+  aiSummary   String?
+  aiTopics    String?
+  createdAt   DateTime @default(now())
+  
+  student     Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+}
+
+model Schedule {
+  id          String   @id @default(cuid())
+  studentId   String
+  startDate   DateTime
+  endDate     DateTime
+  status      String   @default("ACTIVE")
+  createdAt   DateTime @default(now())
+  
+  student     Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  tasks       Task[]
+}
+
+model Task {
+  id          String   @id @default(cuid())
+  scheduleId  String
+  subject     String
+  day         String
+  topic       String
+  questionCount Int
+  solvedQuestions Int  @default(0)
+  isCompleted Boolean  @default(false)
+  status      String   @default("PENDING") // PENDING, COMPLETED, PARTIAL, FAILED
+  bookId      String?
+  pagesRange  String?
+  
+  schedule    Schedule @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+  book        Book?    @relation(fields: [bookId], references: [id], onDelete: SetNull)
+}
+
+model SessionNote {
+  id          String   @id @default(cuid())
+  studentId   String
+  title       String
+  content     String
+  sessionNumber Int?
+  plannedQuestions Int?
+  solvedQuestions Int?
+  maturityScore Int?     // 1-5 index
+  weeklyAnxiety Int?
+  weeklyMotivation Int?
+  weeklyFocus   Int?
+  parentFeedback String?
+  timeManagement String?  // "Süre Yetti", "Hafif Yetişmedi", "Büyük Süre Sorunu"
+  date        DateTime @default(now())
+  
+  student     Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+}
+
+model ParentCommunication {
+  id          String   @id @default(cuid())
+  studentId   String
+  topic       String
+  message     String
+  isDraft     Boolean  @default(false)
+  date        DateTime @default(now())
+  
+  student     Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+}
+
+model FinanceRecord {
+  id          String   @id @default(cuid())
+  studentId   String
+  title       String
+  amount      Float
+  type        String   @default("PAYMENT") // PAYMENT, DEBT
+  status      String   @default("PAID")    // PAID, PENDING
+  date        DateTime @default(now())
+  
+  student     Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+}
+
+model Appointment {
+  id          String   @id @default(cuid())
+  studentId   String
+  title       String
+  date        DateTime
+  durationMin Int      @default(45)
+  status      String   @default("SCHEDULED") // SCHEDULED, COMPLETED, CANCELLED
+  
+  student     Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+}
+
+model Book {
+  id             String   @id @default(cuid())
+  studentId      String
+  title          String
+  publisher      String   // brand
+  difficulty     String   // KOLAY, ORTA, ZOR
+  totalPages     Int      @default(200)
+  completedPages Int      @default(0)
+  createdAt      DateTime @default(now())
+  
+  student        Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  tasks          Task[]
+}

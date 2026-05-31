@@ -1,65 +1,251 @@
-import Image from "next/image";
+import React from 'react';
+import prisma from '@/lib/prisma';
+import Link from 'next/link';
+import DashboardChartsClient from './DashboardChartsClient';
 
-export default function Home() {
+export default async function Home() {
+  const students = await prisma.student.findMany({
+    orderBy: { firstName: 'asc' },
+    include: {
+      exams: { orderBy: { date: 'desc' } },
+      parentComms: { orderBy: { date: 'desc' } },
+      schedules: {
+        where: { status: 'ACTIVE' },
+        include: { tasks: true }
+      },
+      psychoRecords: { orderBy: { date: 'desc' } },
+      appointments: { orderBy: { date: 'asc' } },
+      finances: { orderBy: { date: 'desc' } },
+      sessions: { select: { id: true } }
+    }
+  });
+
+  const today = new Date();
+  
+  // 1. Appointments for today
+  const todayAppts = students.flatMap(s => 
+    s.appointments.filter(a => {
+      const apptDate = new Date(a.date);
+      return apptDate.getDate() === today.getDate() && 
+             apptDate.getMonth() === today.getMonth() && 
+             apptDate.getFullYear() === today.getFullYear();
+    }).map(a => ({ ...a, student: s }))
+  ).sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+  // 2. Finance Alerts (Pending debts)
+  const pendingFinances = students.flatMap(s => 
+    s.finances.filter(f => f.status === 'PENDING').map(f => ({ ...f, student: s }))
+  );
+
+  // 3. Psycho Alerts (Anxiety > 7 or Motivation < 4 in recent record)
+  const psychoAlerts = students.filter(s => {
+    if (s.psychoRecords.length === 0) return false;
+    const latest = s.psychoRecords[0];
+    return latest.anxietyLevel > 7 || latest.motivationLevel < 4;
+  });
+
+  // 4. Performance Drop
+  const performanceAlerts = students.filter(s => {
+    if (s.exams.length < 2) return false;
+    return s.exams[0].totalNet < s.exams[1].totalNet - 5;
+  });
+
+  // 4.5. Prepaid Balance Alerts
+  const bakiyeKritikAlerts = students.map(s => {
+    const totalPaid = s.finances
+      .filter(f => f.type === 'PAYMENT' && f.status === 'PAID')
+      .reduce((sum, f) => sum + f.amount, 0);
+    const completedSessions = s.sessions.length;
+    const remaining = (totalPaid / 1500) - completedSessions;
+    return { student: s, remaining, totalPaid };
+  }).filter(item => item.remaining < 2);
+
+  // 5. Parent Comm Alerts (> 14 days)
+  const communicationAlerts = students.filter(s => {
+    if (s.parentComms.length === 0) return true;
+    const lastCommDate = new Date(s.parentComms[0].date);
+    const diffDays = Math.floor((today.getTime() - lastCommDate.getTime()) / (1000 * 3600 * 24));
+    return diffDays > 14;
+  });
+
+  // 6. Calculate Leaderboard (ranking students by solved questions from active schedules)
+  const activeSchedules = await prisma.schedule.findMany({
+    where: { status: 'ACTIVE' },
+    include: {
+      student: true,
+      tasks: true
+    }
+  });
+
+  const leaderboardMap: { [studentId: string]: { name: string; solved: number; target: number } } = {};
+  for (const schedule of activeSchedules) {
+    const sId = schedule.studentId;
+    if (!leaderboardMap[sId]) {
+      leaderboardMap[sId] = {
+        name: `${schedule.student.firstName} ${schedule.student.lastName}`,
+        solved: 0,
+        target: 0
+      };
+    }
+    for (const task of schedule.tasks) {
+      leaderboardMap[sId].solved += task.solvedQuestions;
+      leaderboardMap[sId].target += task.questionCount;
+    }
+  }
+
+  const leaderboard = Object.entries(leaderboardMap)
+    .map(([id, info]) => ({
+      id,
+      ...info
+    }))
+    .sort((a, b) => b.solved - a.solved);
+
+  // 7. Calculate Group Exam Net Average Trend
+  const allExams = await prisma.exam.findMany({
+    orderBy: { date: 'asc' }
+  });
+
+  const examGroups: { [name: string]: { totalNetSum: number; count: number; date: Date } } = {};
+  for (const exam of allExams) {
+    const key = exam.name;
+    if (!examGroups[key]) {
+      examGroups[key] = {
+        totalNetSum: 0,
+        count: 0,
+        date: new Date(exam.date)
+      };
+    }
+    examGroups[key].totalNetSum += exam.totalNet;
+    examGroups[key].count += 1;
+    if (new Date(exam.date) < examGroups[key].date) {
+      examGroups[key].date = new Date(exam.date);
+    }
+  }
+
+  const groupExamTrend = Object.entries(examGroups)
+    .map(([name, data]) => ({
+      name,
+      Ortalama: Math.round((data.totalNetSum / data.count) * 100) / 100,
+      date: data.date
+    }))
+    .sort((a, b) => a.date.getTime() - b.date.getTime())
+    .map(({ name, Ortalama }) => ({ name, Ortalama }));
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
+    <main style={{ maxWidth: '1200px', margin: '0 auto', width: '100%' }}>
+      <header style={{ marginBottom: '2.5rem', background: 'linear-gradient(135deg, #3B82F6 0%, #2563EB 100%)', padding: '3rem', borderRadius: 'var(--radius-lg)', color: 'white', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)' }}>
+        <div>
+          <div style={{ fontSize: '1rem', color: '#CBD5E1', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '0.5rem' }}>
+            {today.toLocaleDateString('tr-TR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+          </div>
+          <h1 style={{ fontSize: '2.5rem', fontWeight: 900, marginBottom: '0.5rem', letterSpacing: '-0.03em' }}>
+            Günaydın, Ahmet Bey. ☀️
           </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
+          <p style={{ color: '#E2E8F0', fontSize: '1.1rem', maxWidth: '600px', lineHeight: 1.5 }}>
+            Bugün <strong>{todayAppts.length}</strong> öğrenciyle seansınız var. Dikkat etmeniz gereken <strong>{psychoAlerts.length + performanceAlerts.length + bakiyeKritikAlerts.length}</strong> akademik/psikolojik/finansal risk durumu tespit ettim.
           </p>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+        <div style={{ display: 'flex', gap: '1rem' }}>
+          <Link href="/students" className="btn-primary" style={{ background: '#3B82F6', border: 'none', color: 'white', fontWeight: 600 }}>Öğrenci Envanteri</Link>
+          <Link href="/finances" className="btn-secondary" style={{ background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', color: 'white' }}>Takvim & Finans</Link>
         </div>
-      </main>
-    </div>
+      </header>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '2rem' }}>
+        
+        {/* Sol Sütun: Günlük Takvim */}
+        <div>
+          <div className="card" style={{ height: '100%' }}>
+            <h2 style={{ fontSize: '1.25rem', fontWeight: 800, marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <span>📅</span> Bugünkü Seanslarınız
+            </h2>
+            {todayAppts.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '3rem 1rem', color: 'var(--text-secondary)' }}>
+                <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>☕</div>
+                <p>Bugün için planlanmış bir koçluk seansınız bulunmuyor.</p>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                {todayAppts.map(appt => (
+                  <div key={appt.id} style={{ display: 'flex', gap: '1rem', padding: '1rem', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', background: 'var(--bg-main)' }}>
+                    <div style={{ fontWeight: 800, color: 'var(--primary)', minWidth: '60px' }}>
+                      {new Date(appt.date).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}
+                    </div>
+                    <div>
+                      <div style={{ fontWeight: 700 }}>{appt.student.firstName} {appt.student.lastName}</div>
+                      <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{appt.title}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Sağ Sütun: Yapay Zeka Analizi ve Acil Durumlar */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+          
+          <div className="card" style={{ borderLeft: '4px solid #F59E0B' }}>
+            <h2 style={{ fontSize: '1.1rem', fontWeight: 800, color: '#F59E0B', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <span>🧠</span> Psikolojik, Akademik ve Finansal Uyarılar
+            </h2>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+              {psychoAlerts.map(s => (
+                <div key={'psy-'+s.id} style={{ fontSize: '0.9rem', padding: '0.75rem', background: 'rgba(245, 158, 11, 0.1)', borderRadius: '4px', color: '#D97706', display: 'flex', justifyContent: 'space-between' }}>
+                  <span><strong>{s.firstName} {s.lastName}:</strong> Kaygı düzeyi çok yüksek veya motivasyonu çok düşük. Bugünkü görüşmede mental desteğe odaklanın.</span>
+                  <Link href={`/students/${s.id}`} style={{ fontWeight: 600, color: '#D97706' }}>İncele</Link>
+                </div>
+              ))}
+              {performanceAlerts.map(s => (
+                <div key={'perf-'+s.id} style={{ fontSize: '0.9rem', padding: '0.75rem', background: 'rgba(239, 68, 68, 0.1)', borderRadius: '4px', color: '#B91C1C', display: 'flex', justifyContent: 'space-between' }}>
+                  <span><strong>{s.firstName} {s.lastName}:</strong> [⚠️ Performans Alarmı] Son denemesinde bir öncekine göre 5 netten fazla düşüş var. Özel test üretmeyi değerlendirin.</span>
+                  <Link href={`/students/${s.id}`} style={{ fontWeight: 600, color: '#B91C1C' }}>İncele</Link>
+                </div>
+              ))}
+              {bakiyeKritikAlerts.map(item => (
+                <div key={'bakiye-'+item.student.id} style={{ fontSize: '0.9rem', padding: '0.75rem', background: 'rgba(239, 68, 68, 0.1)', borderRadius: '4px', color: '#B91C1C', display: 'flex', justifyContent: 'space-between' }}>
+                  <span><strong>{item.student.firstName} {item.student.lastName}:</strong> [💳 Bakiye Kritik] Kalan Seans: <strong>{item.remaining.toFixed(1)}</strong> (Yapılan: {item.student.sessions.length}, Ödenen: {Math.round(item.totalPaid / 1500)} seans)</span>
+                  <Link href={`/students/${item.student.id}`} style={{ fontWeight: 600, color: '#B91C1C' }}>İncele</Link>
+                </div>
+              ))}
+              {psychoAlerts.length === 0 && performanceAlerts.length === 0 && bakiyeKritikAlerts.length === 0 && (
+                <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>Şu an için kritik bir risk tespit edilmedi.</p>
+              )}
+            </div>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
+            <div className="card" style={{ borderLeft: '4px solid #10B981' }}>
+               <h2 style={{ fontSize: '1rem', fontWeight: 800, color: '#10B981', marginBottom: '1rem' }}>📞 Veli İletişimi Gecikenler</h2>
+               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                 {communicationAlerts.slice(0, 3).map(s => (
+                   <div key={'comm-'+s.id} style={{ fontSize: '0.85rem', display: 'flex', justifyContent: 'space-between', padding: '0.5rem', background: 'var(--bg-main)', borderRadius: '4px' }}>
+                     <span style={{ fontWeight: 600 }}>{s.firstName} {s.lastName}</span>
+                     <Link href="/parents" style={{ color: 'var(--primary)' }}>Mesaj At</Link>
+                   </div>
+                 ))}
+                 {communicationAlerts.length === 0 && <span style={{ fontSize: '0.85rem', color: 'var(--success)' }}>Tüm velilerle iletişim güncel.</span>}
+               </div>
+            </div>
+
+            <div className="card" style={{ borderLeft: '4px solid #EF4444' }}>
+               <h2 style={{ fontSize: '1rem', fontWeight: 800, color: '#EF4444', marginBottom: '1rem' }}>💰 Bekleyen Alacaklar (Finans)</h2>
+               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                 {pendingFinances.slice(0, 3).map(f => (
+                   <div key={'fin-'+f.id} style={{ fontSize: '0.85rem', display: 'flex', justifyContent: 'space-between', padding: '0.5rem', background: 'var(--bg-main)', borderRadius: '4px' }}>
+                     <span style={{ fontWeight: 600 }}>{f.student.firstName} ({f.title})</span>
+                     <span style={{ fontWeight: 800, color: '#EF4444' }}>₺{f.amount}</span>
+                   </div>
+                 ))}
+                 {pendingFinances.length === 0 && <span style={{ fontSize: '0.85rem', color: 'var(--success)' }}>Ödenmemiş borç bulunmuyor.</span>}
+               </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <DashboardChartsClient leaderboard={leaderboard} groupExamTrend={groupExamTrend} />
+    </main>
   );
 }
