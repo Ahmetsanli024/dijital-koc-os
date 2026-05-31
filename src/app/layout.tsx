@@ -1,16 +1,23 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import prisma from "@/lib/prisma";
+import HeaderSearch from "./HeaderSearch";
 
 export const metadata: Metadata = {
   title: "Eğitim Koçluğu Yönetimi",
   description: "Yapay Zeka Destekli Bireysel Koçluk Sistemi",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const students = await prisma.student.findMany({
+    select: { id: true, firstName: true, lastName: true },
+    orderBy: { firstName: 'asc' }
+  });
+
   return (
     <html lang="tr">
       <body style={{ display: 'flex', minHeight: '100vh' }}>
@@ -87,20 +94,7 @@ export default function RootLayout({
             top: 0,
             zIndex: 50
           }} className="top-header">
-            <div style={{ position: 'relative', width: '400px' }}>
-              <span style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }}>🔍</span>
-              <input type="text" placeholder="Hızlı ara: Öğrenci, not, yayın evi..." style={{ 
-                width: '100%', 
-                padding: '0.65rem 1rem 0.65rem 2.5rem', 
-                borderRadius: 'var(--radius-full)', 
-                border: '1px solid var(--border)', 
-                background: 'var(--bg-main)', 
-                outline: 'none', 
-                fontSize: '0.9rem', 
-                color: 'var(--text-primary)',
-                transition: 'var(--transition)'
-              }} />
-            </div>
+            <HeaderSearch students={students} />
             <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'center' }}>
               <button style={{ background: 'none', border: 'none', fontSize: '1.2rem', cursor: 'pointer', position: 'relative', color: 'var(--text-secondary)' }}>
                 🔔
