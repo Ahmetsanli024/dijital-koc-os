@@ -141,12 +141,14 @@ const SmartSubjectCard = ({ subject, topics, state, onUpdate }: {
 };
 
 export default function WizardClient({ students }: { students: any[] }) {
-  const [step, setStep] = useState(1);
+  const [showSyncModal, setShowSyncModal] = useState(false);
+  const [selectedExamId, setSelectedExamId] = useState('');
+  const [examFile, setExamFile] = useState<File | null>(null);
   const [selectedTemplate, setSelectedTemplate] = useState('standart');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [showSmartDist, setShowSmartDist] = useState(true);
   const [selectedArchiveExams, setSelectedArchiveExams] = useState<string[]>([]);
-  const [isExamDropdownOpen, setIsExamDropdownOpen] = useState(false);
+  
 
   const [selectedStudent, setSelectedStudent] = useState<any>(null);
   
@@ -172,7 +174,7 @@ export default function WizardClient({ students }: { students: any[] }) {
   const [analysisSeconds, setAnalysisSeconds] = useState(0);
 
   // Arşivden Sınav Seçimi - AI Dağıtımını Tetikler
-  const handleSyncTopicList = async () => {
+  const handleSyncTopicList = async (examIdToUse?: string) => {
     if (!selectedStudent || !selectedStudent.exams || selectedStudent.exams.length === 0) {
       alert('Öğrencinin kayıtlı sınavı bulunmuyor.');
       return;
@@ -180,8 +182,7 @@ export default function WizardClient({ students }: { students: any[] }) {
 
     // Aggregate topics from all SINGLE exams to avoid double counting
     const subjectMap: Record<string, Record<string, { correct: number, incorrect: number, blank: number }>> = {};
-    const singleExams = selectedStudent.exams.filter((e:any) => e.examType === 'SINGLE' || !e.examType);
-    const examsToUse = singleExams.length > 0 ? singleExams : selectedStudent.exams; // fallback to all if no singles
+    const examsToUse = examIdToUse ? selectedStudent.exams.filter((e:any)=>e.id === examIdToUse) : selectedStudent.exams; // fallback to all if no singles
 
     examsToUse.forEach((exam: any) => {
       if (exam.subjectDetails && exam.subjectDetails !== '[]') {
@@ -389,8 +390,59 @@ export default function WizardClient({ students }: { students: any[] }) {
     }
   };
 
-  const nextStep = () => setStep(s => s + 1);
-  const prevStep = () => setStep(s => s - 1);
+  
+  const handlePdfUploadSync = async () => {
+    if (!examFile) return;
+    setShowSyncModal(false);
+    setIsAnalyzing(true);
+    setAnalysisSeconds(0);
+    const interval = setInterval(() => setAnalysisSeconds(s => s + 1), 1000);
+
+    try {
+      const formData = new FormData();
+      formData.append('pdf', examFile);
+      
+      const uploadRes = await fetch('/api/upload-exam', { method: 'POST', body: formData });
+      const uploadData = await uploadRes.json();
+      if (!uploadRes.ok) throw new Error(uploadData.error);
+      
+      const res = await fetch('/api/ai-distribution', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          aggregatedData: [{ subject: "Yapay Zeka Analizi", topics: uploadData.topics || [] }],
+          studentName: selectedStudent.firstName + ' ' + selectedStudent.lastName,
+          rawScanData: uploadData.rawText 
+        })
+      });
+      
+      const distData = await res.json();
+      if (!res.ok) throw new Error(distData.error);
+      
+      const { aiData } = distData;
+      setSmartState(prev => {
+        const next = { ...prev };
+        Object.keys(aiData.subjects).forEach(aiSubject => {
+          const mapped = findMatchingSubject(aiSubject);
+          if (mapped && next[mapped]) {
+            next[mapped] = { ...next[mapped], aiParsedTopics: aiData.subjects[aiSubject] };
+          }
+        });
+        return next;
+      });
+      
+      if (aiData?.evaluationSummary) {
+        setStudentNote(aiData.evaluationSummary + '\n\nBu eksikleri kapatmak için bu haftaki görevlerini ertelemeden tamamlaman başarının anahtarıdır. Sana inancım tam!');
+      }
+      alert('Yapay Zeka PDF Analizi Tamamlandı!');
+    } catch(err:any) {
+      alert('Hata: ' + err.message);
+    } finally {
+      clearInterval(interval);
+      setIsAnalyzing(false);
+    }
+  };
+
 
   return (
     <main style={{ maxWidth: '1400px', margin: '0 auto', width: '100%' }}>
@@ -581,109 +633,38 @@ export default function WizardClient({ students }: { students: any[] }) {
           to { opacity: 1; }
         }
       `}</style>
-      <header className="no-print" style={{ marginBottom: '2rem' }}>
-        <h1 style={{ fontSize: '2.2rem', fontWeight: 800, color: 'var(--text-primary)', marginBottom: '0.5rem', letterSpacing: '-0.03em' }}>
-          Ödev Kontrol & Haftalık Program
-        </h1>
-        <p style={{ color: 'var(--text-secondary)', fontSize: '1rem' }}>Öğrenci analiz belgesi üzerinden YZ destekli akıllı program hazırlama.</p>
-      </header>
-
-      {/* Progress Bar */}
-      <div style={{ display: 'flex', gap: '1rem', marginBottom: '2.5rem' }}>
-        {['Öğrenci Seçimi', 'Ödev Kontrolü', 'Program Tasarımı'].map((label, idx) => {
-          const s = idx + 1;
-          const active = step >= s;
-          return (
-            <div key={label} style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-              <div style={{ height: '6px', background: active ? 'var(--primary)' : 'var(--border)', borderRadius: '3px', transition: 'all 0.3s' }} />
-              <span style={{ fontSize: '0.85rem', fontWeight: active ? 800 : 600, color: active ? 'var(--primary)' : 'var(--text-muted)', textTransform: 'uppercase' }}>{s}. {label}</span>
-            </div>
-          );
-        })}
-      </div>
-
-      {step === 1 && (
-        <section className="card" style={{ maxWidth: '600px', margin: '0 auto', animation: 'fadeIn 0.3s' }}>
-          <h2 style={{ fontSize: '1.25rem', fontWeight: 700, marginBottom: '1.5rem' }}>Hangi öğrenci için plan hazırlayacağız?</h2>
+      <header className="no-print" style={{ marginBottom: '2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+        <div>
+          <h1 style={{ fontSize: '2.2rem', fontWeight: 800, color: 'var(--text-primary)', marginBottom: '0.5rem', letterSpacing: '-0.03em' }}>
+            Hızlı Ders Programı Tasarımı
+          </h1>
+          <p style={{ color: 'var(--text-secondary)', fontSize: '1rem' }}>Öğrenci profilini seçerek YZ destekli akıllı program hazırlayabilirsiniz.</p>
+        </div>
+        <div style={{ width: '300px' }}>
           <select 
+            value={selectedStudent?.id || ''}
             onChange={(e) => {
               const std = students.find(s => s.id === e.target.value);
               setSelectedStudent(std);
             }}
-            style={{ width: '100%', padding: '1rem', borderRadius: 'var(--radius-md)', border: '2px solid var(--border)', fontSize: '1rem', marginBottom: '1.5rem', background: 'var(--bg-main)' }}>
-            <option value="">Envanterden Öğrenci Seçin...</option>
-            {students.map(s => (
+            style={{ width: '100%', padding: '0.8rem 1rem', borderRadius: 'var(--radius-md)', border: '2px solid var(--border)', fontSize: '1rem', background: 'var(--bg-main)', outline: 'none', fontWeight: 700, color: 'var(--text-primary)', cursor: 'pointer' }}>
+            <option value="">Öğrenci Seçiniz...</option>
+            {students.map((s:any) => (
               <option key={s.id} value={s.id}>{s.firstName} {s.lastName}</option>
             ))}
           </select>
-          <button 
-            className="btn-primary" 
-            onClick={nextStep} 
-            disabled={!selectedStudent}
-            style={{ width: '100%', padding: '1rem', opacity: selectedStudent ? 1 : 0.5 }}>
-            Ödev Kontrolüne Geç ➡️
-          </button>
-        </section>
-      )}
+        </div>
+      </header>
 
-      {step === 2 && (
-        <section className="card" style={{ maxWidth: '800px', margin: '0 auto', animation: 'fadeIn 0.3s' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-            <h2 style={{ fontSize: '1.25rem', fontWeight: 700 }}>Geçmiş Ödev Kontrolü</h2>
-            <button className="btn-secondary" onClick={prevStep}>Geri Dön</button>
-          </div>
-          
-          {selectedStudent?.schedules && selectedStudent.schedules.length > 0 ? (
-            <div>
-              <p style={{ marginBottom: '1.5rem', color: 'var(--text-secondary)' }}>Öğrencinin önceki haftaya ait ödevleri aşağıda listelenmiştir. Yapılan görevleri işaretleyin.</p>
-              <div style={{ background: 'var(--bg-main)', padding: '1rem', borderRadius: '12px', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                 {selectedStudent.schedules[0].tasks.map((task: any) => (
-                   <div key={task.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '1rem', background: 'white', borderRadius: '8px', border: '1px solid var(--border)' }}>
-                     <div style={{ display: 'flex', flexDirection: 'column' }}>
-                       <span style={{ fontWeight: 800, color: 'var(--text-primary)', fontSize: '0.9rem' }}>{task.subject}</span>
-                       <span style={{ color: 'var(--text-secondary)', fontSize: '0.8rem' }}>{task.topic} • {task.day} • {task.questionCount} Soru</span>
-                     </div>
-                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                       <span style={{ fontSize: '0.8rem', fontWeight: 600, color: task.isCompleted ? 'var(--success)' : 'var(--text-muted)' }}>
-                         {task.isCompleted ? 'Yapıldı' : 'Bekliyor'}
-                       </span>
-                       <input 
-                         type="checkbox" 
-                         checked={task.isCompleted}
-                         onChange={async (e) => {
-                           task.isCompleted = e.target.checked;
-                           // Trigger re-render by cloning state
-                           setSelectedStudent({...selectedStudent});
-                           await toggleTaskCompletion(task.id, e.target.checked);
-                         }}
-                         style={{ width: '20px', height: '20px', accentColor: 'var(--success)', cursor: 'pointer' }}
-                       />
-                     </div>
-                   </div>
-                 ))}
-              </div>
-            </div>
-          ) : (
-             <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-secondary)' }}>
-                Bu öğrenciye ait geçmiş bir çalışma programı bulunmuyor.
-             </div>
-          )}
-          
-          <button 
-            className="btn-primary" 
-            onClick={nextStep} 
-            style={{ width: '100%', padding: '1rem', marginTop: '1.5rem' }}>
-            Yeni Program Tasarımına Geç ➡️
-          </button>
-        </section>
-      )}
 
-      {step === 3 && (
+
         <section className="print-area" style={{ animation: 'fadeIn 0.3s', padding: 0, overflow: 'visible' }}>
           <div className="no-print" style={{ padding: '1.5rem 2rem', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'white', borderRadius: 'var(--radius-lg) var(--radius-lg) 0 0' }}>
             <div>
               <h2 style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--primary)' }}>HAFTALIK DERS ÇALIŞMA PLANI</h2>
-              <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>{selectedStudent?.firstName} {selectedStudent?.lastName} - {selectedStudent?.grade}</p>
+              <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
+                {selectedStudent ? `${selectedStudent.firstName} ${selectedStudent.lastName} - ${selectedStudent.grade}` : 'Genel Öğrenci Şablonu'}
+              </p>
             </div>
             <div style={{ display: 'flex', gap: '1rem' }}>
               <select 
@@ -700,7 +681,6 @@ export default function WizardClient({ students }: { students: any[] }) {
               <button className="btn-secondary" onClick={() => setShowSmartDist(!showSmartDist)} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 700, borderColor: 'var(--primary)', color: 'var(--primary)' }}>
                 {showSmartDist ? 'Akıllı Dağıtımı Gizle' : '🧠 Akıllı Dağıtımı Aç'}
               </button>
-              <button className="btn-secondary" onClick={() => { prevStep(); }}>← Geri</button>
             </div>
           </div>
 
@@ -715,7 +695,7 @@ export default function WizardClient({ students }: { students: any[] }) {
                 </div>
                 <div style={{ display: 'flex', gap: '1rem' }}>
                   <button 
-                    onClick={handleSyncTopicList}
+                    onClick={() => handleSyncTopicList()}
                     disabled={isAnalyzing || !selectedStudent?.exams?.length}
                     className="btn-secondary"
                     style={{ padding: '0.75rem 1rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--primary)', color: 'var(--primary)', background: 'rgba(16, 185, 129, 0.05)', fontWeight: 800, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem', opacity: (!selectedStudent?.exams?.length || isAnalyzing) ? 0.5 : 1 }}>
@@ -1155,7 +1135,6 @@ export default function WizardClient({ students }: { students: any[] }) {
             </div>
           </div>
         </section>
-      )}
 
       {isAnalyzing && (
         <div style={{
@@ -1242,6 +1221,41 @@ export default function WizardClient({ students }: { students: any[] }) {
             <p style={{ color: 'var(--text-muted)', fontSize: '0.75rem', marginTop: '1rem' }}>
               İşlem süresi sınav boyutuna göre değişebilir. Lütfen bekleyin.
             </p>
+          </div>
+        </div>
+      )}
+      {/* Sync Modal */}
+      {showSyncModal && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 99999, background: 'rgba(15,23,42,0.8)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', animation: 'fadeIn 0.2s' }}>
+          <div style={{ background: 'white', width: '90%', maxWidth: '600px', borderRadius: '16px', padding: '2.5rem', position: 'relative' }}>
+            <button onClick={() => setShowSyncModal(false)} style={{ position: 'absolute', top: '1rem', right: '1rem', background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer', color: 'var(--text-muted)' }}>×</button>
+            <h2 style={{ fontSize: '1.5rem', fontWeight: 800, marginBottom: '0.5rem', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <span style={{ fontSize: '2rem' }}>🧠</span> Akıllı Senkronizasyon
+            </h2>
+            <p style={{ color: 'var(--text-secondary)', marginBottom: '2rem', fontSize: '0.95rem' }}>Öğrencinin güncel zayıflıklarını ve hedeflerini YZ ile analiz ederek programı otomatik dizin.</p>
+            
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+              {/* Option 1: PDF */}
+              <div style={{ border: '2px solid var(--border)', padding: '1.5rem', borderRadius: '12px' }}>
+                <h3 style={{ fontSize: '1.1rem', fontWeight: 700, marginBottom: '0.5rem', color: 'var(--primary)' }}>📄 Yeni PDF Sınav Yükle</h3>
+                <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '1rem' }}>Son girilen denemeyi yükleyin, yapay zeka saniyeler içinde eksikleri bulsun.</p>
+                <input type="file" accept="application/pdf" onChange={(e) => setExamFile(e.target.files?.[0] || null)} style={{ marginBottom: '1rem', width: '100%' }} />
+                <button onClick={handlePdfUploadSync} disabled={!examFile} className="btn-primary" style={{ width: '100%', padding: '0.8rem', opacity: examFile ? 1 : 0.5 }}>PDF'i Tara ve Senkronize Et</button>
+              </div>
+
+              {/* Option 2: Arşiv */}
+              <div style={{ border: '2px solid var(--border)', padding: '1.5rem', borderRadius: '12px' }}>
+                <h3 style={{ fontSize: '1.1rem', fontWeight: 700, marginBottom: '0.5rem', color: 'var(--primary)' }}>🗂️ Arşivden Sınav Seç</h3>
+                <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '1rem' }}>Öğrencinin daha önce sisteme işlenmiş sınavlarından birini analiz edin.</p>
+                <select value={selectedExamId} onChange={e => setSelectedExamId(e.target.value)} style={{ width: '100%', padding: '0.8rem', borderRadius: '8px', border: '1px solid var(--border)', marginBottom: '1rem' }}>
+                  <option value="">Sınav Seçiniz...</option>
+                  {selectedStudent?.exams?.map((e:any) => (
+                    <option key={e.id} value={e.id}>{new Date(e.date).toLocaleDateString('tr-TR')} - {e.examType || 'Deneme'}</option>
+                  ))}
+                </select>
+                <button onClick={() => { setShowSyncModal(false); handleSyncTopicList(selectedExamId); }} disabled={!selectedExamId} className="btn-secondary" style={{ width: '100%', padding: '0.8rem', opacity: selectedExamId ? 1 : 0.5 }}>Seçili Sınavla Senkronize Et</button>
+              </div>
+            </div>
           </div>
         </div>
       )}
