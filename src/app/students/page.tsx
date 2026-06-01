@@ -2,6 +2,7 @@ import React from 'react';
 import { addStudent, deleteStudent } from '../actions/student';
 import prisma from '@/lib/prisma';
 import MudurRaporuButton from './MudurRaporuButton';
+import Link from 'next/link';
 
 export default async function StudentsPage() {
   const students = await prisma.student.findMany({
@@ -105,9 +106,9 @@ export default async function StudentsPage() {
                       </td>
                       <td>
                         <div style={{ display: 'flex', gap: '0.5rem' }}>
-                          <a href={`/students/${student.id}`} style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem', background: 'var(--bg-main)', color: 'var(--text-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', cursor: 'pointer', fontWeight: 600, textDecoration: 'none', transition: 'all 0.2s' }}>
+                          <Link href={`/students/${student.id}`} style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem', background: 'var(--bg-main)', color: 'var(--text-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', cursor: 'pointer', fontWeight: 600, textDecoration: 'none', transition: 'all 0.2s' }}>
                             📁 Klasörü İncele
-                          </a>
+                          </Link>
                           <form action={async () => {
                             'use server'
                             await deleteStudent(student.id)

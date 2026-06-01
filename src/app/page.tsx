@@ -120,13 +120,24 @@ export default async function Home() {
     .map(({ name, Ortalama }) => ({ name, Ortalama }));
 
   return (
-    <main style={{ maxWidth: '1200px', margin: '0 auto', width: '100%' }}>
-      <header style={{ marginBottom: '2.5rem', background: 'linear-gradient(135deg, #3B82F6 0%, #2563EB 100%)', padding: '3rem', borderRadius: 'var(--radius-lg)', color: 'white', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)' }}>
+    <main style={{ maxWidth: '1200px', margin: '0 auto', width: '100%', animation: 'fadeIn 0.3s ease-out' }}>
+      <header style={{ 
+        marginBottom: '2.5rem', 
+        background: 'linear-gradient(135deg, #10B981 0%, #064E3B 100%)', 
+        padding: '3rem', 
+        borderRadius: 'var(--radius-lg)', 
+        color: 'white', 
+        display: 'flex', 
+        justifyContent: 'space-between', 
+        alignItems: 'center', 
+        boxShadow: 'var(--shadow-lg), 0 0 40px rgba(16, 185, 129, 0.25)',
+        border: '1px solid rgba(255, 255, 255, 0.1)'
+      }}>
         <div>
-          <div style={{ fontSize: '1rem', color: '#CBD5E1', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '0.5rem' }}>
+          <div style={{ fontSize: '0.9rem', color: '#A7F3D0', textTransform: 'uppercase', letterSpacing: '0.15em', fontWeight: 700, marginBottom: '0.5rem' }}>
             {today.toLocaleDateString('tr-TR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
           </div>
-          <h1 style={{ fontSize: '2.5rem', fontWeight: 900, marginBottom: '0.5rem', letterSpacing: '-0.03em' }}>
+          <h1 style={{ fontSize: '2.5rem', fontWeight: 900, marginBottom: '0.5rem', letterSpacing: '-0.03em', color: '#FFFFFF' }}>
             Günaydın, Ahmet Bey. ☀️
           </h1>
           <p style={{ color: '#E2E8F0', fontSize: '1.1rem', maxWidth: '600px', lineHeight: 1.5 }}>
@@ -134,11 +145,13 @@ export default async function Home() {
           </p>
         </div>
         <div style={{ display: 'flex', gap: '1rem' }}>
-          <Link href="/students" className="btn-primary" style={{ background: '#3B82F6', border: 'none', color: 'white', fontWeight: 600 }}>Öğrenci Envanteri</Link>
+          <Link href="/students" className="btn-primary" style={{ background: 'rgba(255, 255, 255, 0.15)', border: '1px solid rgba(255, 255, 255, 0.25)', color: 'white', fontWeight: 600, backdropFilter: 'blur(4px)' }}>
+            Öğrenci Envanteri
+          </Link>
         </div>
       </header>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '2rem' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.8fr', gap: '2rem' }}>
         
         {/* Sol Sütun: Günlük Takvim */}
         <div>
@@ -154,12 +167,20 @@ export default async function Home() {
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                 {todayAppts.map(appt => (
-                  <div key={appt.id} style={{ display: 'flex', gap: '1rem', padding: '1rem', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', background: 'var(--bg-main)' }}>
-                    <div style={{ fontWeight: 800, color: 'var(--primary)', minWidth: '60px' }}>
+                  <div key={appt.id} className="card-hover-item" style={{ 
+                    display: 'flex', 
+                    gap: '1rem', 
+                    padding: '1rem', 
+                    border: '1px solid var(--border)', 
+                    borderRadius: 'var(--radius-md)', 
+                    background: 'var(--bg-main)',
+                    transition: 'var(--transition)'
+                  }}>
+                    <div style={{ fontWeight: 800, color: 'var(--secondary)', minWidth: '60px' }}>
                       {new Date(appt.date).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}
                     </div>
                     <div>
-                      <div style={{ fontWeight: 700 }}>{appt.student.firstName} {appt.student.lastName}</div>
+                      <div style={{ fontWeight: 700, color: 'var(--text-primary)' }}>{appt.student.firstName} {appt.student.lastName}</div>
                       <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{appt.title}</div>
                     </div>
                   </div>
@@ -176,17 +197,37 @@ export default async function Home() {
             <h2 style={{ fontSize: '1.1rem', fontWeight: 800, color: '#F59E0B', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
               <span>🧠</span> Psikolojik ve Akademik Uyarılar
             </h2>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
               {psychoAlerts.map(s => (
-                <div key={'psy-'+s.id} style={{ fontSize: '0.9rem', padding: '0.75rem', background: 'rgba(245, 158, 11, 0.1)', borderRadius: '4px', color: '#D97706', display: 'flex', justifyContent: 'space-between' }}>
-                  <span><strong>{s.firstName} {s.lastName}:</strong> Kaygı düzeyi çok yüksek veya motivasyonu çok düşük. Bugünkü görüşmede mental desteğe odaklanın.</span>
-                  <Link href={`/students/${s.id}`} style={{ fontWeight: 600, color: '#D97706' }}>İncele</Link>
+                <div key={'psy-'+s.id} style={{ 
+                  fontSize: '0.9rem', 
+                  padding: '0.75rem 1rem', 
+                  background: 'rgba(245, 158, 11, 0.08)', 
+                  borderRadius: 'var(--radius-sm)', 
+                  color: '#FBBF24', 
+                  display: 'flex', 
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  border: '1px solid rgba(245, 158, 11, 0.15)'
+                }}>
+                  <span style={{ paddingRight: '1rem' }}><strong>{s.firstName} {s.lastName}:</strong> Kaygı düzeyi çok yüksek veya motivasyonu çok düşük. Mental desteğe odaklanın.</span>
+                  <Link href={`/students/${s.id}`} style={{ fontWeight: 700, color: '#F59E0B', textDecoration: 'none', minWidth: '50px' }}>İncele</Link>
                 </div>
               ))}
               {performanceAlerts.map(s => (
-                <div key={'perf-'+s.id} style={{ fontSize: '0.9rem', padding: '0.75rem', background: 'rgba(239, 68, 68, 0.1)', borderRadius: '4px', color: '#B91C1C', display: 'flex', justifyContent: 'space-between' }}>
-                  <span><strong>{s.firstName} {s.lastName}:</strong> [⚠️ Performans Alarmı] Son denemesinde bir öncekine göre 5 netten fazla düşüş var. Özel test üretmeyi değerlendirin.</span>
-                  <Link href={`/students/${s.id}`} style={{ fontWeight: 600, color: '#B91C1C' }}>İncele</Link>
+                <div key={'perf-'+s.id} style={{ 
+                  fontSize: '0.9rem', 
+                  padding: '0.75rem 1rem', 
+                  background: 'rgba(239, 68, 68, 0.08)', 
+                  borderRadius: 'var(--radius-sm)', 
+                  color: '#F87171', 
+                  display: 'flex', 
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  border: '1px solid rgba(239, 68, 68, 0.15)'
+                }}>
+                  <span style={{ paddingRight: '1rem' }}><strong>{s.firstName} {s.lastName}:</strong> [⚠️ Performans Alarmı] Son denemede 5 netten fazla düşüş var. Özel test üretin.</span>
+                  <Link href={`/students/${s.id}`} style={{ fontWeight: 700, color: '#EF4444', textDecoration: 'none', minWidth: '50px' }}>İncele</Link>
                 </div>
               ))}
               {psychoAlerts.length === 0 && performanceAlerts.length === 0 && (
@@ -200,9 +241,17 @@ export default async function Home() {
                <h2 style={{ fontSize: '1rem', fontWeight: 800, color: '#10B981', marginBottom: '1rem' }}>📞 Veli İletişimi Gecikenler</h2>
                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                  {communicationAlerts.slice(0, 3).map(s => (
-                   <div key={'comm-'+s.id} style={{ fontSize: '0.85rem', display: 'flex', justifyContent: 'space-between', padding: '0.5rem', background: 'var(--bg-main)', borderRadius: '4px' }}>
-                     <span style={{ fontWeight: 600 }}>{s.firstName} {s.lastName}</span>
-                     <Link href="/parents" style={{ color: 'var(--primary)' }}>Mesaj At</Link>
+                   <div key={'comm-'+s.id} style={{ 
+                     fontSize: '0.85rem', 
+                     display: 'flex', 
+                     justifyContent: 'space-between', 
+                     padding: '0.75rem 1rem', 
+                     background: 'var(--bg-main)', 
+                     borderRadius: 'var(--radius-sm)',
+                     border: '1px solid var(--border)'
+                   }}>
+                     <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{s.firstName} {s.lastName}</span>
+                     <Link href="/parents" style={{ color: 'var(--secondary)', fontWeight: 700, textDecoration: 'none' }}>Mesaj At</Link>
                    </div>
                  ))}
                  {communicationAlerts.length === 0 && <span style={{ fontSize: '0.85rem', color: 'var(--success)' }}>Tüm velilerle iletişim güncel.</span>}

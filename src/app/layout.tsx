@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import prisma from "@/lib/prisma";
 import HeaderSearch from "./HeaderSearch";
+import NavLink from "./NavLink";
 
 export const metadata: Metadata = {
   title: "Eğitim Koçluğu Yönetimi",
@@ -79,7 +80,7 @@ export default async function RootLayout({
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
           {/* Top Header Bar */}
           <header style={{ 
-            background: 'rgba(255, 255, 255, 0.8)', 
+            background: 'rgba(255, 255, 255, 0.85)', 
             backdropFilter: 'blur(12px)',
             WebkitBackdropFilter: 'blur(12px)',
             padding: '1rem 3rem', 
@@ -112,24 +113,4 @@ export default async function RootLayout({
   );
 }
 
-import Link from 'next/link';
 
-// A simple helper component for navigation links
-function NavLink({ href, icon, text }: { href: string, icon: string, text: string }) {
-  return (
-    <Link href={href} className="nav-link" style={{ 
-      padding: '0.75rem 1rem', 
-      borderRadius: 'var(--radius-md)', 
-      color: 'var(--text-secondary)', 
-      textDecoration: 'none', 
-      fontWeight: 600, 
-      fontSize: '0.95rem', 
-      display: 'flex', 
-      alignItems: 'center', 
-      gap: '0.75rem',
-      transition: 'var(--transition)'
-    }}>
-      <span style={{ fontSize: '1.2rem' }}>{icon}</span> {text}
-    </Link>
-  );
-}
