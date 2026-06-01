@@ -24,6 +24,7 @@ export async function createSchedule(studentId: string, tasksData: any[]) {
             day: t.day,
             topic: t.topic,
             questionCount: t.questionCount || 0,
+            pagesRange: t.pagesRange || null,
             isCompleted: false
           }))
         }

@@ -19,7 +19,7 @@ export default async function StudentsPage() {
       <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2.5rem' }}>
         <div>
           <h1 style={{ fontSize: '2.2rem', fontWeight: 800, color: 'var(--text-primary)', marginBottom: '0.5rem', letterSpacing: '-0.03em' }}>
-            Öğrenci Hafızası
+            Dijital Öğrenci Envanteri
           </h1>
           <p style={{ color: 'var(--text-secondary)', fontSize: '1rem' }}>Sisteme kayıtlı, aktif danışmanlık verdiğiniz tüm öğrencilerin profilleri.</p>
         </div>
@@ -28,41 +28,93 @@ export default async function StudentsPage() {
         </div>
       </header>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '350px 1fr', gap: '2rem' }}>
-        {/* Öğrenci Ekleme Formu */}
-        <section className="card" style={{ alignSelf: 'start', borderTop: '4px solid var(--primary)' }}>
-          <h2 style={{ fontSize: '1.25rem', fontWeight: 700, marginBottom: '1.5rem' }}>+ Yeni Öğrenci Ekle</h2>
-          <form action={addStudent} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-            <div>
-              <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>Adı</label>
-              <input type="text" name="firstName" required style={{ width: '100%', padding: '0.75rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'var(--bg-main)' }} />
-            </div>
-            <div>
-              <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>Soyadı</label>
-              <input type="text" name="lastName" required style={{ width: '100%', padding: '0.75rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'var(--bg-main)' }} />
-            </div>
-            <div>
-              <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>Sınıfı</label>
-              <input type="text" name="grade" placeholder="Örn: 8. Sınıf" required style={{ width: '100%', padding: '0.75rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'var(--bg-main)' }} />
-            </div>
-            <div>
-              <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>Hedef (Puan/Yüzdelik)</label>
-              <input type="text" name="target" placeholder="Örn: %5 Dilim" style={{ width: '100%', padding: '0.75rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'var(--bg-main)' }} />
-            </div>
-            <div>
-              <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>Veli Adı</label>
-              <input type="text" name="parentName" style={{ width: '100%', padding: '0.75rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'var(--bg-main)' }} />
-            </div>
-            <div>
-              <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>Veli Telefonu</label>
-              <input type="text" name="parentPhone" placeholder="Örn: 90555..." style={{ width: '100%', padding: '0.75rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'var(--bg-main)' }} />
-            </div>
-            <button type="submit" className="btn-primary" style={{ width: '100%', marginTop: '0.5rem', background: 'linear-gradient(135deg, var(--primary), var(--secondary))', border: 'none' }}>Öğrenciyi Kaydet</button>
-          </form>
-        </section>
+      {/* Fütüristik Öğrenci Ekleme Modülü (Siber-Estetik & Glassmorphism) */}
+      <section style={{ 
+        marginBottom: '3rem', 
+        background: 'linear-gradient(145deg, rgba(15, 23, 42, 0.9), rgba(30, 58, 138, 0.8))',
+        border: '1px solid rgba(96, 165, 250, 0.3)',
+        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.1)',
+        borderRadius: 'var(--radius-lg)',
+        padding: '2.5rem',
+        backdropFilter: 'blur(20px)',
+        position: 'relative',
+        overflow: 'hidden'
+      }}>
+        {/* Dekoratif Siber Işıklar ve Grid */}
+        <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, background: 'linear-gradient(rgba(56, 189, 248, 0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(56, 189, 248, 0.03) 1px, transparent 1px)', backgroundSize: '20px 20px', pointerEvents: 'none' }}></div>
+        <div style={{ position: 'absolute', top: '-100px', right: '-100px', width: '300px', height: '300px', background: 'radial-gradient(circle, rgba(56, 189, 248, 0.15) 0%, rgba(0,0,0,0) 70%)', borderRadius: '50%', filter: 'blur(40px)', pointerEvents: 'none' }}></div>
+        <div style={{ position: 'absolute', bottom: '-100px', left: '-100px', width: '300px', height: '300px', background: 'radial-gradient(circle, rgba(16, 185, 129, 0.1) 0%, rgba(0,0,0,0) 70%)', borderRadius: '50%', filter: 'blur(40px)', pointerEvents: 'none' }}></div>
+        
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem', position: 'relative', zIndex: 1 }}>
+          <h2 style={{ fontSize: '1.4rem', fontWeight: 900, display: 'flex', alignItems: 'center', gap: '0.75rem', color: 'white', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
+            <div style={{ width: '40px', height: '40px', background: 'rgba(56, 189, 248, 0.1)', border: '1px solid rgba(56, 189, 248, 0.3)', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#38BDF8', boxShadow: '0 0 15px rgba(56, 189, 248, 0.2)' }}>⚡</div>
+            Dijital Kayıt Terminali
+          </h2>
+          <div style={{ padding: '0.4rem 0.8rem', background: 'rgba(16, 185, 129, 0.1)', border: '1px solid rgba(16, 185, 129, 0.3)', borderRadius: '20px', color: '#34D399', fontSize: '0.75rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+            Sistem Aktif
+          </div>
+        </div>
+        
+        <form action={addStudent} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1.5rem', position: 'relative', zIndex: 1 }}>
+          <div className="input-group">
+            <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 800, color: '#94A3B8', marginBottom: '0.5rem', textTransform: 'uppercase', letterSpacing: '0.1em' }}>👤 Öğrenci Adı</label>
+            <input type="text" name="firstName" required style={{ width: '100%', padding: '1rem', borderRadius: 'var(--radius-md)', border: '1px solid rgba(148, 163, 184, 0.2)', background: 'rgba(15, 23, 42, 0.5)', color: 'white', fontWeight: 600, transition: 'all 0.3s' }} placeholder="Örn: Ahmet" />
+          </div>
+          <div className="input-group">
+            <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 800, color: '#94A3B8', marginBottom: '0.5rem', textTransform: 'uppercase', letterSpacing: '0.1em' }}>📝 Öğrenci Soyadı</label>
+            <input type="text" name="lastName" required style={{ width: '100%', padding: '1rem', borderRadius: 'var(--radius-md)', border: '1px solid rgba(148, 163, 184, 0.2)', background: 'rgba(15, 23, 42, 0.5)', color: 'white', fontWeight: 600, transition: 'all 0.3s' }} placeholder="Örn: Yılmaz" />
+          </div>
+          <div className="input-group">
+            <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 800, color: '#94A3B8', marginBottom: '0.5rem', textTransform: 'uppercase', letterSpacing: '0.1em' }}>🏫 Sınıfı</label>
+            <input type="text" name="grade" required style={{ width: '100%', padding: '1rem', borderRadius: 'var(--radius-md)', border: '1px solid rgba(148, 163, 184, 0.2)', background: 'rgba(15, 23, 42, 0.5)', color: 'white', fontWeight: 600, transition: 'all 0.3s' }} placeholder="Örn: 8. Sınıf" />
+          </div>
+          <div className="input-group">
+            <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 800, color: '#94A3B8', marginBottom: '0.5rem', textTransform: 'uppercase', letterSpacing: '0.1em' }}>🎯 Hedef (Dilim/Puan)</label>
+            <input type="text" name="target" style={{ width: '100%', padding: '1rem', borderRadius: 'var(--radius-md)', border: '1px solid rgba(148, 163, 184, 0.2)', background: 'rgba(15, 23, 42, 0.5)', color: 'white', fontWeight: 600, transition: 'all 0.3s' }} placeholder="Örn: %5 Dilim" />
+          </div>
+          <div className="input-group">
+            <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 800, color: '#94A3B8', marginBottom: '0.5rem', textTransform: 'uppercase', letterSpacing: '0.1em' }}>👨‍👩‍👧 Veli Adı</label>
+            <input type="text" name="parentName" style={{ width: '100%', padding: '1rem', borderRadius: 'var(--radius-md)', border: '1px solid rgba(148, 163, 184, 0.2)', background: 'rgba(15, 23, 42, 0.5)', color: 'white', fontWeight: 600, transition: 'all 0.3s' }} placeholder="Örn: Ayşe Hanım" />
+          </div>
+          <div className="input-group">
+            <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 800, color: '#94A3B8', marginBottom: '0.5rem', textTransform: 'uppercase', letterSpacing: '0.1em' }}>📞 Veli İletişim</label>
+            <input type="text" name="parentPhone" style={{ width: '100%', padding: '1rem', borderRadius: 'var(--radius-md)', border: '1px solid rgba(148, 163, 184, 0.2)', background: 'rgba(15, 23, 42, 0.5)', color: 'white', fontWeight: 600, transition: 'all 0.3s' }} placeholder="0555..." />
+          </div>
+          
+          <div style={{ gridColumn: '1 / -1', display: 'flex', justifyContent: 'flex-end', marginTop: '1rem' }}>
+            <button type="submit" style={{ 
+              padding: '1rem 3rem', 
+              background: 'linear-gradient(135deg, #38BDF8, #2563EB)', 
+              color: 'white', 
+              border: 'none', 
+              borderRadius: 'var(--radius-md)', 
+              fontSize: '1.1rem', 
+              fontWeight: 800, 
+              display: 'flex', 
+              gap: '0.75rem', 
+              alignItems: 'center',
+              boxShadow: '0 10px 20px -5px rgba(56, 189, 248, 0.5)',
+              cursor: 'pointer',
+              textTransform: 'uppercase',
+              letterSpacing: '0.05em',
+              transition: 'all 0.3s'
+            }}>
+              <span>🚀</span> Kaydı Başlat ve Şifrele
+            </button>
+          </div>
+        </form>
 
-        {/* Öğrenci Listesi */}
-        <section className="card" style={{ padding: 0, overflow: 'hidden' }}>
+        <style>{`
+          .input-group input:focus {
+            outline: none;
+            border-color: #38BDF8 !important;
+            box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.2);
+            background: rgba(15, 23, 42, 0.8) !important;
+          }
+        `}</style>
+      </section>
+
+      <div>        <section className="card" style={{ padding: 0, overflow: 'hidden' }}>
           <div style={{ padding: '1.5rem', borderBottom: '1px solid var(--border)', display: 'flex', gap: '1rem', background: 'var(--bg-main)' }}>
             <h2 style={{ fontSize: '1.25rem', fontWeight: 700 }}>Sistemdeki Öğrenciler ({students.length})</h2>
           </div>

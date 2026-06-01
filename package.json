@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@google/genai": "^2.7.0",
+    "@google/generative-ai": "^0.24.1",
     "@prisma/client": "^5.22.0",
     "html2canvas": "^1.4.1",
     "next": "16.2.6",

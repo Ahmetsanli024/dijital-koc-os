@@ -96,12 +96,13 @@ const SmartSubjectCard = ({ subject, topics, state, onUpdate }: {
 
         {/* Daily Goal Input */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'var(--bg-main)', padding: '0.4rem 0.8rem', borderRadius: '8px' }}>
-          <span style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-secondary)' }}>SORU</span>
+          <span style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-secondary)' }}>HEDEF</span>
           <input 
             type="text" 
             value={state.q}
             onChange={(e) => onUpdate({ ...state, q: e.target.value })}
-            style={{ width: '40px', padding: '0.2rem', border: '1px solid var(--border)', borderRadius: '6px', fontSize: '1rem', fontWeight: 800, color: 'var(--text-primary)', textAlign: 'center', outline: 'none' }} 
+            placeholder="50 Soru, Syf 20-30..."
+            style={{ width: '120px', padding: '0.3rem', border: '1px solid var(--border)', borderRadius: '6px', fontSize: '0.9rem', fontWeight: 700, color: 'var(--text-primary)', textAlign: 'center', outline: 'none' }} 
           />
         </div>
 
@@ -356,11 +357,14 @@ export default function WizardClient({ students }: { students: any[] }) {
     Object.entries(scheduleData).forEach(([subject, daysObj]) => {
       Object.entries(daysObj).forEach(([day, taskInfo]) => {
         if (taskInfo.t || taskInfo.q) {
+          const targetValue = (taskInfo.q || '').trim();
+          const isPureNumeric = /^\d+$/.test(targetValue);
           tasksData.push({
             subject,
             day,
             topic: taskInfo.t || 'Genel Tekrar',
-            questionCount: parseInt(taskInfo.q) || 0
+            questionCount: isPureNumeric ? parseInt(targetValue) : 0,
+            pagesRange: !isPureNumeric && targetValue.length > 0 ? targetValue : null
           });
         }
       });

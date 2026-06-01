@@ -1,10 +1,12 @@
 'use client';
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import html2canvas from 'html2canvas';
 import KanbanPlanner from './KanbanPlanner';
-
+import { BOOK_CATALOG } from '@/lib/bookCatalog';
+import { calculateLgsPercentile, getImprovementOpportunities } from '@/lib/lgsCalculator';
 import { updateStudent } from '../../actions/student';
 import { deleteExam } from '../../actions/exam';
 
@@ -14,6 +16,10 @@ export default function ClientPage({ initialStudent }: { initialStudent: any }) 
   const [showProgram, setShowProgram] = useState(false);
   const [showKanban, setShowKanban] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
+  
+  const [showPsychoForm, setShowPsychoForm] = useState(false);
+  const [psychoForm, setPsychoForm] = useState({ anxiety: 5, motivation: 5, focus: 5, note: '' });
+  const [showWhatsAppReport, setShowWhatsAppReport] = useState(false);
   const [openSubject, setOpenSubject] = useState<string | null>(null);
   const [selectedTopicExams, setSelectedTopicExams] = useState<string[]>([]);
   const [selectedPublisher, setSelectedPublisher] = useState<string>('');
@@ -28,11 +34,17 @@ export default function ClientPage({ initialStudent }: { initialStudent: any }) 
   const [photoAnalysis, setPhotoAnalysis] = useState<any>(null);
   const [photoAnalysisError, setPhotoAnalysisError] = useState<string | null>(null);
   const [studentStatus, setStudentStatus] = useState<string>('Başarılı');
+  
+  const [aiLetterHtml, setAiLetterHtml] = useState<string | null>(null);
+  const [isGeneratingLetter, setIsGeneratingLetter] = useState(false);
 
-  // OCR Review & Confirm State
   const [showReviewModal, setShowReviewModal] = useState(false);
   const [reviewedTasks, setReviewedTasks] = useState<any[]>([]);
   const [isSavingReview, setIsSavingReview] = useState(false);
+  
+  // AI Preview Modal State
+  const [reportPreview, setReportPreview] = useState<{ type: 'parent'|'principal', text: string } | null>(null);
+
   const [pastedImage, setPastedImage] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
@@ -417,25 +429,52 @@ export default function ClientPage({ initialStudent }: { initialStudent: any }) 
   };
 
 
-  // Grafikler için en güncel veya seçilmiş sınavın verilerini hazırla
-  const getChartData = () => {
-    // subjectDetails içeren son sınavı bul
+  // Grafikler için kıyaslamalı veri (Son Sınav vs Genel Ortalama) hazırlığı
+  const getComparisonChartData = () => {
+    if (!exams || exams.length === 0) return null;
+    
+    // 1. Son Sınav Verisi
     const latestExamWithDetails = exams.find((e: any) => e.subjectDetails && e.subjectDetails !== '[]');
-    if (!latestExamWithDetails) return null;
-    try {
-      const details = JSON.parse(latestExamWithDetails.subjectDetails);
-      return details.map((d: any) => ({
-        name: d.name.substring(0, 3), // Kısaltma (TÜR, MAT, vs.)
-        fullName: d.name,
-        net: parseFloat(d.net),
-        dogru: parseInt(d.correct),
-        yanlis: parseInt(d.incorrect)
-      }));
-    } catch (err) {
-      return null;
+    let latestDetails: any[] = [];
+    if (latestExamWithDetails) {
+      try {
+        latestDetails = JSON.parse(latestExamWithDetails.subjectDetails);
+      } catch(e) {}
     }
+
+    // 2. Ortalama Veri (Tüm sınavların ders bazlı net ortalaması)
+    const subjectSums: Record<string, { totalNet: number, count: number }> = {};
+    exams.forEach((exam: any) => {
+      if (exam.subjectDetails && exam.subjectDetails !== '[]') {
+        try {
+          const details = JSON.parse(exam.subjectDetails);
+          details.forEach((d: any) => {
+            const name = d.name.substring(0, 3);
+            if (!subjectSums[name]) subjectSums[name] = { totalNet: 0, count: 0 };
+            subjectSums[name].totalNet += parseFloat(d.net || 0);
+            subjectSums[name].count += 1;
+          });
+        } catch(e) {}
+      }
+    });
+
+    // 3. Birleştirme
+    const chartData = [];
+    for (const [subj, data] of Object.entries(subjectSums)) {
+      const avgNet = parseFloat((data.totalNet / data.count).toFixed(2));
+      const latestMatched = latestDetails.find(d => d.name.substring(0,3) === subj);
+      const latestNet = latestMatched ? parseFloat(latestMatched.net) : 0;
+      
+      chartData.push({
+        name: subj,
+        avgNet: avgNet,
+        latestNet: latestNet
+      });
+    }
+
+    return chartData.length > 0 ? chartData : null;
   };
-  const chartData = getChartData();
+  const comparisonChartData = getComparisonChartData();
 
   const calculateHomeworkStats = () => {
     if (!initialStudent.schedules) return {};
@@ -494,9 +533,20 @@ export default function ClientPage({ initialStudent }: { initialStudent: any }) 
     let score = 150 + (avgNet / 90) * 350;
     if (score > 500) score = 500;
     
+    const latestExamWithDetails = exams.find((e: any) => e.subjectDetails && e.subjectDetails !== '[]');
+    let opportunities: any[] = [];
+    if (latestExamWithDetails) {
+      try {
+        const details = JSON.parse(latestExamWithDetails.subjectDetails);
+        opportunities = getImprovementOpportunities(details);
+      } catch(e) {}
+    }
+    
     return {
       avgNet: avgNet.toFixed(1),
       score: Math.round(score),
+      percentile: calculateLgsPercentile(Math.round(score)),
+      opportunities: opportunities.slice(0, 3), // Top 3 opportunities
       gap: initialStudent.target ? `${initialStudent.target} hedefine ulaşmak için analizleri inceleyin.` : "Öğrenci profiline hedef lise girmelisiniz."
     };
   };
@@ -617,6 +667,21 @@ export default function ClientPage({ initialStudent }: { initialStudent: any }) 
               <button onClick={() => setShowEditModal(true)} className="btn-secondary" style={{ padding: '0.3rem 0.6rem', fontSize: '0.75rem' }}>
                 Düzenle ✏️
               </button>
+              <button onClick={() => {
+                let report = `Sayın Veli, \n${initialStudent.firstName} adlı öğrencimizin bu haftaki durum değerlendirmesi:\n\n`;
+                if (exams.length > 0) {
+                  report += `📌 Son Deneme: ${exams[0].name} (Toplam Net: ${exams[0].totalNet})\n`;
+                  if (chronicWeaknesses.length > 0) report += `⚠️ Tespit Edilen Zayıf Konular: ${chronicWeaknesses.slice(0,3).join(', ')}\n`;
+                }
+                if (initialStudent.psychoRecords && initialStudent.psychoRecords.length > 0) {
+                  const p = initialStudent.psychoRecords[0];
+                  report += `\n🧠 Psikolojik & Kariyer:\nMotivasyon: ${p.motivationLevel}/10 | Kaygı: ${p.anxietyLevel}/10\nNot: ${p.coachNote || 'Sürecimiz planlandığı gibi olumlu ilerlemektedir.'}\n`;
+                }
+                report += `\nÖnümüzdeki hafta hedeflerini tamamlaması için desteklerinizi rica ederim. İyi çalışmalar.`;
+                window.open(`https://wa.me/${(initialStudent.parentPhone || '').replace(/\s+/g, '')}?text=${encodeURIComponent(report)}`, '_blank');
+              }} className="btn-primary" style={{ padding: '0.3rem 0.8rem', fontSize: '0.75rem', background: '#25D366', color: 'white' }}>
+                WhatsApp Raporu 💬
+              </button>
             </div>
           </div>
         </div>
@@ -649,34 +714,24 @@ export default function ClientPage({ initialStudent }: { initialStudent: any }) 
           </div>
         </div>
 
-        {/* Right Side: Veli Rapor Card */}
-        <div className="card" style={{ flex: 1.8, padding: '1.5rem', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+        {/* Right Side: Quick Assignment Planner */}
+        <div className="card" style={{ flex: 1.8, padding: '1.5rem', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', background: 'linear-gradient(135deg, rgba(30,58,138,0.02), rgba(30,58,138,0.05))', border: '1px solid rgba(30,58,138,0.1)' }}>
           <div>
-            <div style={{ fontSize: '0.8rem', fontWeight: 800, color: 'var(--primary)', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}><span>💬</span> Veli Bilgilendirme</span>
-              <select 
-                value={studentStatus} 
-                onChange={(e) => {
-                  const newStatus = e.target.value;
-                  setStudentStatus(newStatus);
-                  setParentNote(generateWhatsAppText(newStatus));
-                }} 
-                style={{ fontSize: '0.75rem', padding: '0.2rem 0.4rem', borderRadius: '6px', border: '1px solid var(--border)', background: 'var(--bg-main)', fontWeight: 700 }}
-              >
-                <option value="Başarılı">Durum: Başarılı</option>
-                <option value="Aksayan">Durum: Aksayan</option>
-                <option value="Kaygılı">Durum: Kaygılı</option>
-              </select>
+            <div style={{ fontSize: '0.9rem', fontWeight: 800, color: 'var(--primary)', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}><span>⚡</span> Hızlı Görev & Ödev Atama</span>
             </div>
-            <textarea 
-              value={parentNote}
-              onChange={(e) => setParentNote(e.target.value)}
-              style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', lineHeight: '1.4', width: '100%', height: '90px', border: '1px dashed var(--border)', padding: '0.5rem', borderRadius: '8px', resize: 'none', background: '#fafafa', outline: 'none', fontFamily: 'inherit' }}
-            />
+            <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', lineHeight: '1.5' }}>
+              Ayrı sayfalarda gezinmeden doğrudan öğrenci profilinin içerisinden, tamamen aşamasız şekilde yeni bir haftalık program başlatın.
+            </p>
           </div>
-          <button onClick={handleWhatsApp} className="btn-primary" style={{ width: '100%', padding: '0.5rem', fontSize: '0.85rem', background: '#25D366', color: 'white', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', marginTop: '0.5rem' }}>
-            <span>💬</span> WhatsApp'tan Gönder 🚀
-          </button>
+          <div style={{ display: 'flex', gap: '1rem', marginTop: '1.5rem' }}>
+            <button onClick={() => setShowKanban(true)} className="btn-secondary" style={{ flex: 1, padding: '0.75rem', fontSize: '0.85rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
+              <span>🖐️</span> Görsel Kanban (Sürükle Bırak)
+            </button>
+            <Link href={`/assignments?studentId=${initialStudent.id}`} className="btn-primary" style={{ flex: 1, padding: '0.75rem', fontSize: '0.85rem', background: 'linear-gradient(135deg, var(--primary), var(--secondary))', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
+              <span>🚀</span> AI Destekli Sihirbaz
+            </Link>
+          </div>
         </div>
       </header>
 
@@ -686,9 +741,8 @@ export default function ClientPage({ initialStudent }: { initialStudent: any }) 
           { id: 'konular', label: '📚 Konu Takibi', count: exams.length > 0 ? 1 : 0 },
           { id: 'programlar', label: '📅 Çalışma Programları', count: initialStudent.schedules?.length || 0 },
           { id: 'kitaplar', label: '📚 Kitap Havuzu', count: initialStudent.books?.length || 0 },
-          { id: 'gorusmeler', label: '🤝 Seans Notları', count: completedSessions },
           { id: 'psikoloji', label: '🧠 Psikoloji & Kariyer', count: initialStudent.psychoRecords?.length || 0 },
-          { id: 'istatistik', label: '📈 Soru İstatistikleri', count: 2 }
+          { id: 'istatistik', label: '📈 Ödev Tamamlama Alanı', count: 2 }
         ].map(tab => (
           <button 
             key={tab.id}
@@ -736,42 +790,63 @@ export default function ClientPage({ initialStudent }: { initialStudent: any }) 
           </div>
 
           {lgsPrediction && (
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '1.5rem', marginBottom: '1.5rem' }}>
-              <div className="card" style={{ background: 'linear-gradient(135deg, var(--primary) 0%, #312e81 100%)', color: 'white', border: 'none' }}>
-                <h3 style={{ fontSize: '0.9rem', fontWeight: 600, color: 'rgba(255,255,255,0.8)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '0.5rem' }}>🎯 YZ Tahmini LGS Puanı</h3>
-                <div style={{ fontSize: '3rem', fontWeight: 900, lineHeight: 1 }}>{lgsPrediction.score}</div>
-                <div style={{ fontSize: '0.85rem', color: 'rgba(255,255,255,0.9)', marginTop: '1rem', background: 'rgba(255,255,255,0.1)', padding: '0.5rem', borderRadius: '4px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 2fr', gap: '1.5rem', marginBottom: '1.5rem' }}>
+              <div className="card" style={{ background: 'linear-gradient(135deg, var(--primary) 0%, #312e81 100%)', color: 'white', border: 'none', position: 'relative', overflow: 'hidden' }}>
+                <div style={{ position: 'absolute', right: '-10%', top: '-10%', fontSize: '6rem', opacity: 0.1 }}>🎯</div>
+                <h3 style={{ fontSize: '0.9rem', fontWeight: 600, color: 'rgba(255,255,255,0.8)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '0.5rem' }}>YZ Tahmini LGS Performansı</h3>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.5rem' }}>
+                  <div style={{ fontSize: '3.5rem', fontWeight: 900, lineHeight: 1 }}>{lgsPrediction.score}</div>
+                  <div style={{ fontSize: '1rem', fontWeight: 600, color: '#A7F3D0' }}>PUAN</div>
+                </div>
+                <div style={{ marginTop: '0.5rem', fontSize: '1.2rem', fontWeight: 800, color: '#6EE7B7' }}>
+                  Tahmini Yüzdelik: %{lgsPrediction.percentile}
+                </div>
+                <div style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.7)', marginTop: '1.5rem', background: 'rgba(0,0,0,0.2)', padding: '0.5rem', borderRadius: '4px' }}>
                   Son denemelerdeki <strong>{lgsPrediction.avgNet}</strong> ortalama net baz alınmıştır.
                 </div>
               </div>
-              <div className="card" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-                <h3 style={{ fontSize: '1rem', fontWeight: 700, marginBottom: '0.5rem', color: 'var(--text-primary)' }}>Hedef Lise Durumu</h3>
-                <p style={{ fontSize: '0.95rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
-                  <strong>Hedef:</strong> {initialStudent.target || 'Belirtilmedi'} <br/>
-                  {lgsPrediction.gap}
-                </p>
-                <div style={{ marginTop: '1rem', fontSize: '0.85rem', color: 'var(--primary)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <span>💡</span> 
-                  Yapay zeka analiz raporlarını (aşağıdaki tabloda) inceleyerek zayıf konulara odaklanın.
+              <div className="card" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                <div>
+                  <h3 style={{ fontSize: '1.1rem', fontWeight: 800, marginBottom: '0.5rem', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <span style={{ fontSize: '1.2rem' }}>📈</span> Açığı Kapatma Simülasyonu
+                  </h3>
+                  <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '1rem' }}>
+                    Sınav röntgenine göre aşağıdaki alanlardaki hataları giderdiğinizde LGS puanınıza yansıyacak <strong>net artış</strong> potansiyeli:
+                  </p>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                  {lgsPrediction.opportunities.length > 0 ? lgsPrediction.opportunities.map((opp: any, idx: number) => (
+                    <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--bg-main)', padding: '0.75rem 1rem', borderRadius: '8px', borderLeft: '4px solid var(--success)' }}>
+                      <span style={{ fontWeight: 700, fontSize: '0.9rem' }}>{opp.subject} - <span style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>{opp.topic}</span></span>
+                      <span style={{ background: 'rgba(16, 185, 129, 0.1)', color: 'var(--success)', padding: '0.3rem 0.8rem', borderRadius: '20px', fontWeight: 900, fontSize: '0.9rem' }}>
+                        +{opp.potentialIncrease} Puan Artışı
+                      </span>
+                    </div>
+                  )) : (
+                    <div style={{ fontSize: '0.9rem', color: 'var(--text-muted)', fontStyle: 'italic', padding: '1rem', background: 'var(--bg-main)', borderRadius: '8px' }}>
+                      Öğrencinin güncel kazanım bazlı hata verisi bulunamadı. Lütfen detaylı bir sınav yükleyin.
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
           )}
 
-          {chartData && (
-            <div className="card" style={{ marginBottom: '1.5rem', padding: '1.5rem' }}>
-              <h3 style={{ fontSize: '1.1rem', fontWeight: 700, marginBottom: '1rem' }}>📊 Son Sınav Performansı (Net)</h3>
-              <div style={{ height: '300px', width: '100%' }}>
+          {comparisonChartData && (
+            <div className="card" style={{ marginBottom: '1.5rem', padding: '1.5rem', background: 'linear-gradient(135deg, rgba(255,255,255,0.02), rgba(255,255,255,0.05))', border: '1px solid var(--border)' }}>
+              <h3 style={{ fontSize: '1.1rem', fontWeight: 800, marginBottom: '1rem', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <span style={{ fontSize: '1.2rem' }}>📊</span> Genel Ortalama vs. Son Sınav Kıyaslaması
+              </h3>
+              <div style={{ height: '320px', width: '100%' }}>
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={chartData} margin={{ top: 20, right: 30, left: 0, bottom: 5 }}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                    <XAxis dataKey="name" axisLine={false} tickLine={false} />
-                    <YAxis axisLine={false} tickLine={false} />
-                    <Tooltip contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }} />
-                    <Legend />
-                    <Bar dataKey="net" name="Net" fill="var(--primary)" radius={[4, 4, 0, 0]} />
-                    <Bar dataKey="dogru" name="Doğru" fill="var(--success)" radius={[4, 4, 0, 0]} />
-                    <Bar dataKey="yanlis" name="Yanlış" fill="var(--danger)" radius={[4, 4, 0, 0]} />
+                  <BarChart data={comparisonChartData} margin={{ top: 20, right: 30, left: 0, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.1)" />
+                    <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: 'var(--text-secondary)', fontWeight: 700}} />
+                    <YAxis axisLine={false} tickLine={false} tick={{fill: 'var(--text-muted)'}} />
+                    <Tooltip contentStyle={{ borderRadius: '12px', border: '1px solid var(--border)', background: 'var(--bg-card)', boxShadow: '0 10px 25px rgba(0,0,0,0.2)' }} />
+                    <Legend wrapperStyle={{ paddingTop: '10px' }} />
+                    <Bar dataKey="avgNet" name="Genel Ortalama Net" fill="rgba(148, 163, 184, 0.5)" radius={[6, 6, 0, 0]} />
+                    <Bar dataKey="latestNet" name="Son Sınav Neti" fill="var(--primary)" radius={[6, 6, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -1033,131 +1108,7 @@ export default function ClientPage({ initialStudent }: { initialStudent: any }) 
         </section>
       )}
 
-      {activeTab === 'gorusmeler' && (
-        <section style={{ animation: 'fadeIn 0.3s' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-            <h2 style={{ fontSize: '1.25rem', fontWeight: 700 }}>Bireysel Seans Notları</h2>
-          </div>
-
-          <div className="card" style={{ padding: '1.5rem', marginBottom: '2rem', background: 'var(--bg-main)', border: '1px solid var(--border)' }}>
-            <h3 style={{ fontSize: '1.1rem', fontWeight: 700, marginBottom: '1rem' }}>+ Yeni Seans Notu Ekle</h3>
-            <form onSubmit={async (e) => {
-              e.preventDefault();
-              const formData = new FormData(e.currentTarget);
-              const { addSession } = await import('../../actions/student');
-              await addSession(initialStudent.id, formData);
-              (e.currentTarget as HTMLFormElement).reset();
-              router.refresh();
-            }} id="session-form" style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem' }}>
-                <input type="text" name="title" placeholder="Görüşme Başlığı" required style={{ width: '100%', padding: '0.75rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)' }} />
-                <input type="number" name="sessionNumber" placeholder="Seans No (Örn: 5)" defaultValue={completedSessions + 1} required style={{ width: '100%', padding: '0.75rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)' }} />
-                
-                <select name="maturityScore" required style={{ width: '100%', padding: '0.75rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'white' }}>
-                  <option value="">Gidişat / Maturity Skoru (1-5)</option>
-                  <option value="5">⭐⭐⭐⭐⭐ Çok İyi (5)</option>
-                  <option value="4">⭐⭐⭐⭐ İyi (4)</option>
-                  <option value="3">⭐⭐⭐ Orta (3)</option>
-                  <option value="2">⭐⭐ Zayıf (2)</option>
-                  <option value="1">⭐ Çok Zayıf (1)</option>
-                </select>
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem' }}>
-                <input type="number" name="plannedQuestions" placeholder="Planlanan Soru Sayısı" style={{ width: '100%', padding: '0.75rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)' }} />
-                <input type="number" name="solvedQuestions" placeholder="Çözülen Soru Sayısı" style={{ width: '100%', padding: '0.75rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)' }} />
-                <select name="timeManagement" required style={{ width: '100%', padding: '0.75rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'white' }}>
-                  <option value="">⏱️ Süre Yönetimi</option>
-                  <option value="Süre Yetti">⏱️ [Süre Yetti]</option>
-                  <option value="Hafif Yetişmedi">⏱️ [Hafif Yetişmedi]</option>
-                  <option value="Büyük Süre Sorunu">⏱️ [Büyük Süre Sorunu]</option>
-                </select>
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem' }}>
-                <select name="weeklyAnxiety" style={{ width: '100%', padding: '0.75rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'white' }}>
-                  <option value="5">Kaygı Seviyesi: 5/10 (Orta)</option>
-                  {[1,2,3,4,5,6,7,8,9,10].map(n => <option key={n} value={n}>Kaygı: {n}/10</option>)}
-                </select>
-                <select name="weeklyMotivation" style={{ width: '100%', padding: '0.75rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'white' }}>
-                  <option value="7">Motivasyon: 7/10 (İyi)</option>
-                  {[1,2,3,4,5,6,7,8,9,10].map(n => <option key={n} value={n}>Motivasyon: {n}/10</option>)}
-                </select>
-                <select name="weeklyFocus" style={{ width: '100%', padding: '0.75rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'white' }}>
-                  <option value="7">Odaklanma: 7/10 (İyi)</option>
-                  {[1,2,3,4,5,6,7,8,9,10].map(n => <option key={n} value={n}>Odaklanma: {n}/10</option>)}
-                </select>
-              </div>
-
-              <textarea name="content" rows={3} placeholder="Görüşme detayları ve koç seans notları..." required style={{ width: '100%', padding: '0.75rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', resize: 'vertical' }}></textarea>
-              <textarea name="parentFeedback" rows={2} placeholder="Veliden alınan geri bildirim Notu..." style={{ width: '100%', padding: '0.75rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', resize: 'vertical' }}></textarea>
-
-              <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-                <button type="submit" className="btn-primary" style={{ padding: '0.75rem 2rem' }}>Kaydet</button>
-              </div>
-            </form>
-          </div>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-            {initialStudent.sessions?.length > 0 ? [...initialStudent.sessions].sort((a:any, b:any) => new Date(b.date).getTime() - new Date(a.date).getTime()).map((session: any) => (
-              <div key={session.id} className="card" style={{ padding: '1.5rem' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-                  <h3 style={{ fontSize: '1.1rem', fontWeight: 800 }}>
-                    {session.sessionNumber ? `Seans #${session.sessionNumber} - ` : ''}{session.title}
-                  </h3>
-                  <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', fontWeight: 600 }}>{new Date(session.date).toLocaleDateString('tr-TR')}</span>
-                </div>
-                
-                {/* Meta details */}
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '1rem' }}>
-                  {session.maturityScore && (
-                    <span style={{ fontSize: '0.75rem', padding: '0.2rem 0.5rem', borderRadius: '4px', background: 'rgba(59, 130, 246, 0.1)', color: 'var(--secondary)', fontWeight: 700 }}>
-                      Gidişat Skoru: {'⭐'.repeat(session.maturityScore)}
-                    </span>
-                  )}
-                  {session.plannedQuestions && (
-                    <span style={{ fontSize: '0.75rem', padding: '0.2rem 0.5rem', borderRadius: '4px', background: 'rgba(16, 185, 129, 0.1)', color: 'var(--success)', fontWeight: 700 }}>
-                      Soru: {session.solvedQuestions || 0}/{session.plannedQuestions} (%{Math.round(((session.solvedQuestions || 0)/session.plannedQuestions)*100)})
-                    </span>
-                  )}
-                  {(session.weeklyAnxiety || session.weeklyMotivation) && (
-                    <span style={{ fontSize: '0.75rem', padding: '0.2rem 0.5rem', borderRadius: '4px', background: 'rgba(0,0,0,0.05)', color: 'var(--text-secondary)' }}>
-                      Kaygı: {session.weeklyAnxiety || 5}/10 | Mot: {session.weeklyMotivation || 5}/10 | Odak: {session.weeklyFocus || 5}/10
-                    </span>
-                  )}
-                  {session.timeManagement && (
-                    <span style={{ fontSize: '0.75rem', padding: '0.2rem 0.5rem', borderRadius: '4px', background: 'rgba(124, 58, 237, 0.1)', color: 'var(--accent)', fontWeight: 700 }}>
-                      ⏱️ {session.timeManagement}
-                    </span>
-                  )}
-                </div>
-
-                <p style={{ fontSize: '0.95rem', color: 'var(--text-primary)', lineHeight: '1.6', whiteSpace: 'pre-wrap' }}>
-                  {session.content}
-                </p>
-
-                {session.parentFeedback && (
-                  <div style={{ marginTop: '1rem', padding: '0.75rem', background: 'var(--bg-main)', borderLeft: '3px solid var(--accent)', borderRadius: '4px', fontSize: '0.85rem', color: 'var(--text-secondary)', fontStyle: 'italic' }}>
-                    <strong>💬 Veli Geri Bildirimi:</strong> "{session.parentFeedback}"
-                  </div>
-                )}
-
-                <div style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'flex-end', alignItems: 'center' }}>
-                  <button onClick={async () => {
-                    if (confirm('Bu seans notunu silmek istediğinize emin misiniz?')) {
-                      const { deleteSession } = await import('../../actions/student');
-                      await deleteSession(session.id, initialStudent.id);
-                      router.refresh();
-                    }
-                  }} style={{ padding: '0.4rem 0.8rem', background: 'rgba(239, 68, 68, 0.1)', color: 'var(--danger)', border: 'none', borderRadius: 'var(--radius-md)', cursor: 'pointer', fontWeight: 600, fontSize: '0.8rem' }}>Notu Sil</button>
-                </div>
-              </div>
-            )) : (
-              <p style={{ textAlign: 'center', color: 'var(--text-secondary)', padding: '2rem' }}>Henüz kaydedilmiş bir seans notu bulunmuyor.</p>
-            )}
-          </div>
-        </section>
-      )}
+      {/* Görüşmeler tabı zincirleme iş akışı kapsamında Ödev Değerlendirme modalına taşındı */}
 
       <style>{`
         .print-only {
@@ -1355,17 +1306,24 @@ export default function ClientPage({ initialStudent }: { initialStudent: any }) 
                 router.refresh();
               }} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                 <div>
-                  <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>Kitap Adı</label>
-                  <input type="text" name="title" required placeholder="Örn: 3D TYT Matematik" style={{ width: '100%', padding: '0.6rem' }} />
+                  <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>Kitap Seçimi (Veritabanından)</label>
+                  <select name="title" required style={{ width: '100%', padding: '0.6rem', background: 'white', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)' }}>
+                    <option value="">Lütfen sistemdeki havuzdan kitap seçin...</option>
+                    {Object.entries(BOOK_CATALOG).map(([category, books]) => (
+                      <optgroup label={category} key={category}>
+                        {books.map((b: string) => <option value={b} key={b}>{b}</option>)}
+                      </optgroup>
+                    ))}
+                  </select>
                 </div>
                 <div>
-                  <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>Yayın Evi / Marka</label>
-                  <input type="text" name="publisher" required placeholder="Örn: 3D Yayınları" style={{ width: '100%', padding: '0.6rem' }} />
+                  <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>Yayın Evi / Marka (İsteğe Bağlı)</label>
+                  <input type="text" name="publisher" placeholder="Varsa yayını belirtebilirsiniz..." style={{ width: '100%', padding: '0.6rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)' }} />
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                   <div>
                     <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>Zorluk Seviyesi</label>
-                    <select name="difficulty" required style={{ width: '100%', padding: '0.6rem', background: 'white' }}>
+                    <select name="difficulty" required style={{ width: '100%', padding: '0.6rem', background: 'white', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)' }}>
                       <option value="KOLAY">Kolay</option>
                       <option value="ORTA">Orta</option>
                       <option value="ZOR">Zor</option>
@@ -1373,7 +1331,7 @@ export default function ClientPage({ initialStudent }: { initialStudent: any }) 
                   </div>
                   <div>
                     <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>Toplam Sayfa</label>
-                    <input type="number" name="totalPages" required defaultValue={200} min={1} style={{ width: '100%', padding: '0.6rem' }} />
+                    <input type="number" name="totalPages" required defaultValue={200} min={1} style={{ width: '100%', padding: '0.6rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)' }} />
                   </div>
                 </div>
                 <button type="submit" className="btn-primary" style={{ width: '100%', padding: '0.75rem' }}>Kitaplığına Ekle</button>
@@ -1484,6 +1442,39 @@ export default function ClientPage({ initialStudent }: { initialStudent: any }) 
                   <button className="btn-secondary no-print" onClick={() => setShowKanban(true)} style={{ padding: '0.75rem 1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 800 }}>
                     <span style={{ fontSize: '1.2rem' }}>🖐️</span> Sürükle & Bırak ile Planla
                   </button>
+                  <button className="btn-secondary no-print" onClick={async () => {
+                    setIsGeneratingLetter(true);
+                    try {
+                      const weakTopics = exams.length >= 3 ? getChronicWeaknesses() : [];
+                      const latestPsychoNote = initialStudent.psychoRecords?.[0]?.coachNote || '';
+                      const totalTasks = selectedScheduleForModal?.tasks?.length || 0;
+                      
+                      const res = await fetch('/api/generate-motivation-letter', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          studentName: initialStudent.firstName,
+                          grade: initialStudent.grade,
+                          weakTopics,
+                          totalTasks,
+                          latestPsychoNote
+                        })
+                      });
+                      const data = await res.json();
+                      if (data.html) {
+                        setAiLetterHtml(data.html.replace(/\*\*/g, '').replace(/\*/g, ''));
+                        alert('Yapay zeka mektubu hazır. Artık yazdırabilirsiniz!');
+                      } else {
+                        alert(data.error || 'Hata oluştu');
+                      }
+                    } catch (e) {
+                      alert('Bağlantı hatası');
+                    } finally {
+                      setIsGeneratingLetter(false);
+                    }
+                  }} style={{ padding: '0.75rem 1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 800, background: 'rgba(245, 158, 11, 0.05)', color: '#D97706', borderColor: '#F59E0B' }}>
+                    <span style={{ fontSize: '1.2rem' }}>🧠</span> {isGeneratingLetter ? 'Yazılıyor...' : 'Yapay Zeka Mektubu Ekle'}
+                  </button>
                   <button className="btn-primary no-print" onClick={() => window.print()} style={{ padding: '0.75rem 2rem', background: 'linear-gradient(135deg, var(--accent), var(--primary))', border: 'none', display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 800 }}>
                     <span style={{ fontSize: '1.2rem' }}>🖨️</span> PDF Olarak Yazdır
                   </button>
@@ -1530,25 +1521,27 @@ export default function ClientPage({ initialStudent }: { initialStudent: any }) 
                               <div style={{ padding: '0.5rem', height: '100%', display: 'flex', flexDirection: 'column', minHeight: '100px' }}>
                                 
                                 {/* Edit Question Solved Inline */}
-                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.3rem' }}>
-                                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.1rem' }}>
-                                    <input 
-                                      className="no-print"
-                                      type="number" 
-                                      defaultValue={cellTask.solvedQuestions || 0} 
-                                      onBlur={async (e) => {
-                                        const val = parseInt(e.target.value) || 0;
-                                        const { updateTaskStatus } = await import('../../actions/student');
-                                        await updateTaskStatus(cellTask.id, initialStudent.id, cellTask.status, val);
-                                      }}
-                                      style={{ width: '50px', fontSize: '0.75rem', padding: '0.1rem 0', border: '1px solid var(--border)', textAlign: 'center', flexShrink: 0 }} 
-                                    />
-                                    <span style={{ fontSize: '0.75rem', fontWeight: 800 }}>/ {cellTask.questionCount}</span>
+                                {!cellTask.pagesRange && (
+                                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.3rem' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.1rem' }}>
+                                      <input 
+                                        className="no-print"
+                                        type="number" 
+                                        defaultValue={cellTask.solvedQuestions || 0} 
+                                        onBlur={async (e) => {
+                                          const val = parseInt(e.target.value) || 0;
+                                          const { updateTaskStatus } = await import('../../actions/student');
+                                          await updateTaskStatus(cellTask.id, initialStudent.id, cellTask.status, val);
+                                        }}
+                                        style={{ width: '50px', fontSize: '0.75rem', padding: '0.1rem 0', border: '1px solid var(--border)', textAlign: 'center', flexShrink: 0 }} 
+                                      />
+                                      <span style={{ fontSize: '0.75rem', fontWeight: 800 }}>/ {cellTask.questionCount}</span>
+                                    </div>
+                                    <span className="print-only" style={{ fontSize: '0.75rem', fontWeight: 800 }}>
+                                      {cellTask.solvedQuestions || 0} / {cellTask.questionCount} Soru
+                                    </span>
                                   </div>
-                                  <span className="print-only" style={{ fontSize: '0.75rem', fontWeight: 800 }}>
-                                    {cellTask.solvedQuestions || 0} / {cellTask.questionCount} Soru
-                                  </span>
-                                </div>
+                                )}
 
                                 {/* Task Topic */}
                                 <div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-primary)', wordBreak: 'break-word', marginBottom: '0.3rem' }}>
@@ -1557,8 +1550,8 @@ export default function ClientPage({ initialStudent }: { initialStudent: any }) 
 
                                 {/* Pages/Book Info */}
                                 {cellTask.pagesRange && (
-                                  <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '0.2rem', marginBottom: '0.4rem' }}>
-                                    <span>📖</span> {cellTask.pagesRange}
+                                  <div style={{ fontSize: '0.85rem', fontWeight: 800, color: 'var(--primary)', display: 'flex', alignItems: 'center', gap: '0.2rem', marginBottom: '0.4rem' }}>
+                                    <span>🎯</span> {cellTask.pagesRange}
                                   </div>
                                 )}
 
@@ -1661,6 +1654,193 @@ export default function ClientPage({ initialStudent }: { initialStudent: any }) 
                 </div>
               </div>
             </div>
+            
+            {/* 2. Sayfa: AI Motivasyon Mektubu (Sadece Çıktıda Çıkar) */}
+            {aiLetterHtml && (
+              <div className="print-only-block" style={{ pageBreakBefore: 'always', padding: '2rem' }}>
+                <div className="no-print" style={{ marginBottom: '1rem', padding: '0.75rem', background: 'rgba(245, 158, 11, 0.1)', borderLeft: '4px solid var(--accent)', color: 'var(--text-primary)', borderRadius: '4px', fontSize: '0.85rem', fontWeight: 600 }}>
+                  💡 <strong>Editör Kontrolü:</strong> Yapay zekanın oluşturduğu aşağıdaki mektubun üzerine tıklayarak istediğiniz kelimeyi/cümleyi klavyenizle doğrudan düzenleyebilirsiniz. Çıktı aldığınızda ekranda gördüğünüz (düzenlediğiniz) son hali kağıda basılacaktır.
+                </div>
+                <div 
+                  contentEditable={true}
+                  suppressContentEditableWarning={true}
+                  onBlur={(e) => setAiLetterHtml(e.currentTarget.innerHTML)}
+                  dangerouslySetInnerHTML={{ __html: aiLetterHtml }} 
+                  style={{ outline: 'none', fontFamily: "'Segoe UI', Roboto, 'Helvetica Neue', sans-serif", lineHeight: 1.8, fontSize: '1.05rem', color: '#1E293B', whiteSpace: 'pre-wrap' }}
+                />
+              </div>
+            )}
+
+            {/* ZİNCİRLEME İŞ AKIŞI: SEANS & VELİ BİLDİRİMİ (Sadece Ekranda Görünür, Çıktıya Yansımaz) */}
+            <div className="no-print" style={{ marginTop: '3rem', paddingTop: '2rem', borderTop: '2px dashed var(--border)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+                <h2 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--primary)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <span>🤝</span> 2. Aşama: Haftalık Seans Değerlendirmesi
+                </h2>
+                <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontWeight: 600, background: 'var(--bg-main)', padding: '0.4rem 0.8rem', borderRadius: '20px' }}>
+                  Ödev kontrolünü tamamladıysanız PDR notunuzu girin
+                </span>
+              </div>
+
+              <div className="card" style={{ padding: '1.5rem', marginBottom: '2rem', background: 'white', border: '1px solid var(--border)', boxShadow: 'var(--shadow-sm)' }}>
+                <form onSubmit={async (e) => {
+                  e.preventDefault();
+                  const formData = new FormData(e.currentTarget);
+                  const { addSession } = await import('../../actions/student');
+                  await addSession(initialStudent.id, formData);
+                  (e.currentTarget as HTMLFormElement).reset();
+                  router.refresh();
+                }} id="session-form" style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem' }}>
+                    <input type="text" name="title" placeholder="Görüşme Başlığı" required style={{ width: '100%', padding: '0.85rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'var(--bg-main)' }} />
+                    <input type="number" name="sessionNumber" placeholder="Seans No (Örn: 5)" defaultValue={completedSessions + 1} required style={{ width: '100%', padding: '0.85rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'var(--bg-main)' }} />
+                    
+                    <select name="maturityScore" required style={{ width: '100%', padding: '0.85rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'var(--bg-main)', fontWeight: 600 }}>
+                      <option value="">Gidişat / Maturity Skoru (1-5)</option>
+                      <option value="5">⭐⭐⭐⭐⭐ Çok İyi (5)</option>
+                      <option value="4">⭐⭐⭐⭐ İyi (4)</option>
+                      <option value="3">⭐⭐⭐ Orta (3)</option>
+                      <option value="2">⭐⭐ Zayıf (2)</option>
+                      <option value="1">⭐ Çok Zayıf (1)</option>
+                    </select>
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem' }}>
+                    <input type="number" name="plannedQuestions" placeholder="Planlanan Soru Sayısı" style={{ width: '100%', padding: '0.85rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'var(--bg-main)' }} />
+                    <input type="number" name="solvedQuestions" placeholder="Çözülen Soru Sayısı" style={{ width: '100%', padding: '0.85rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'var(--bg-main)' }} />
+                    <select name="timeManagement" required style={{ width: '100%', padding: '0.85rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'var(--bg-main)', fontWeight: 600 }}>
+                      <option value="">⏱️ Süre Yönetimi</option>
+                      <option value="Süre Yetti">⏱️ [Süre Yetti]</option>
+                      <option value="Hafif Yetişmedi">⏱️ [Hafif Yetişmedi]</option>
+                      <option value="Büyük Süre Sorunu">⏱️ [Büyük Süre Sorunu]</option>
+                    </select>
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem' }}>
+                    <select name="weeklyAnxiety" style={{ width: '100%', padding: '0.85rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'var(--bg-main)', fontWeight: 600 }}>
+                      <option value="5">Kaygı Seviyesi: 5/10 (Orta)</option>
+                      {[1,2,3,4,5,6,7,8,9,10].map(n => <option key={n} value={n}>Kaygı: {n}/10</option>)}
+                    </select>
+                    <select name="weeklyMotivation" style={{ width: '100%', padding: '0.85rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'var(--bg-main)', fontWeight: 600 }}>
+                      <option value="7">Motivasyon: 7/10 (İyi)</option>
+                      {[1,2,3,4,5,6,7,8,9,10].map(n => <option key={n} value={n}>Motivasyon: {n}/10</option>)}
+                    </select>
+                    <select name="weeklyFocus" style={{ width: '100%', padding: '0.85rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'var(--bg-main)', fontWeight: 600 }}>
+                      <option value="7">Odaklanma: 7/10 (İyi)</option>
+                      {[1,2,3,4,5,6,7,8,9,10].map(n => <option key={n} value={n}>Odaklanma: {n}/10</option>)}
+                    </select>
+                  </div>
+
+                  <textarea name="content" rows={3} placeholder="Görüşme detayları ve koç seans notları..." required style={{ width: '100%', padding: '0.85rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', resize: 'vertical', background: 'var(--bg-main)' }}></textarea>
+                  <textarea name="parentFeedback" rows={2} placeholder="Veliden alınan geri bildirim Notu..." style={{ width: '100%', padding: '0.85rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', resize: 'vertical', background: 'var(--bg-main)' }}></textarea>
+
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '0.5rem' }}>
+                    <button type="submit" className="btn-primary" style={{ padding: '0.85rem 2.5rem', background: 'linear-gradient(135deg, var(--primary), var(--secondary))', border: 'none', fontSize: '1rem', display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                      <span>💾</span> Seansı Kaydet ve Raporla
+                    </button>
+                  </div>
+                </form>
+              </div>
+              
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                <h3 style={{ fontSize: '1rem', fontWeight: 800, color: 'var(--text-secondary)', marginBottom: '0.5rem' }}>Önceki Seans Geçmişi & Veli Raporları</h3>
+                {initialStudent.sessions?.length > 0 ? [...initialStudent.sessions].sort((a:any, b:any) => new Date(b.date).getTime() - new Date(a.date).getTime()).map((session: any) => (
+                  <div key={session.id} className="card" style={{ padding: '1.5rem', background: 'white' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                      <h3 style={{ fontSize: '1.1rem', fontWeight: 800 }}>
+                        {session.sessionNumber ? `Seans #${session.sessionNumber} - ` : ''}{session.title}
+                      </h3>
+                      <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', fontWeight: 600 }}>{new Date(session.date).toLocaleDateString('tr-TR')}</span>
+                    </div>
+                    
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '1rem' }}>
+                      {session.maturityScore && (
+                        <span style={{ fontSize: '0.75rem', padding: '0.2rem 0.5rem', borderRadius: '4px', background: 'rgba(59, 130, 246, 0.1)', color: 'var(--secondary)', fontWeight: 700 }}>
+                          Gidişat Skoru: {'⭐'.repeat(session.maturityScore)}
+                        </span>
+                      )}
+                      {session.plannedQuestions && (
+                        <span style={{ fontSize: '0.75rem', padding: '0.2rem 0.5rem', borderRadius: '4px', background: 'rgba(16, 185, 129, 0.1)', color: 'var(--success)', fontWeight: 700 }}>
+                          Soru: {session.solvedQuestions || 0}/{session.plannedQuestions} (%{Math.round(((session.solvedQuestions || 0)/session.plannedQuestions)*100)})
+                        </span>
+                      )}
+                      {(session.weeklyAnxiety || session.weeklyMotivation) && (
+                        <span style={{ fontSize: '0.75rem', padding: '0.2rem 0.5rem', borderRadius: '4px', background: 'rgba(0,0,0,0.05)', color: 'var(--text-secondary)' }}>
+                          Kaygı: {session.weeklyAnxiety || 5}/10 | Mot: {session.weeklyMotivation || 5}/10 | Odak: {session.weeklyFocus || 5}/10
+                        </span>
+                      )}
+                      {session.timeManagement && (
+                        <span style={{ fontSize: '0.75rem', padding: '0.2rem 0.5rem', borderRadius: '4px', background: 'rgba(124, 58, 237, 0.1)', color: 'var(--accent)', fontWeight: 700 }}>
+                          ⏱️ {session.timeManagement}
+                        </span>
+                      )}
+                    </div>
+
+                    <p style={{ fontSize: '0.95rem', color: 'var(--text-primary)', lineHeight: '1.6', whiteSpace: 'pre-wrap' }}>
+                      {session.content}
+                    </p>
+
+                    {session.parentFeedback && (
+                      <div style={{ marginTop: '1rem', padding: '0.75rem', background: 'var(--bg-main)', borderLeft: '3px solid var(--accent)', borderRadius: '4px', fontSize: '0.85rem', color: 'var(--text-secondary)', fontStyle: 'italic' }}>
+                        <strong>💬 Veli Geri Bildirimi:</strong> "{session.parentFeedback}"
+                      </div>
+                    )}
+
+                    <div style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div style={{ display: 'flex', gap: '0.5rem' }}>
+                        <button onClick={async (e) => {
+                          e.currentTarget.innerText = "⏳ Üretiliyor...";
+                          try {
+                            const res = await fetch('/api/generate-session-report', {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ studentName: initialStudent.firstName, sessionData: session, targetAudience: 'parent' })
+                            });
+                            const data = await res.json();
+                            if (data.text) {
+                              setReportPreview({ type: 'parent', text: data.text });
+                            }
+                          } catch(err) { alert('Hata oluştu'); }
+                          e.currentTarget.innerHTML = "<span>💬</span> Veli (WhatsApp)";
+                        }} style={{ padding: '0.5rem 1rem', background: '#25D366', color: 'white', border: 'none', borderRadius: 'var(--radius-md)', cursor: 'pointer', fontWeight: 600, fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                          <span>💬</span> Veli (WhatsApp)
+                        </button>
+                        
+                        <button onClick={async (e) => {
+                          e.currentTarget.innerText = "⏳ Üretiliyor...";
+                          try {
+                            const res = await fetch('/api/generate-session-report', {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ studentName: initialStudent.firstName, sessionData: session, targetAudience: 'principal' })
+                            });
+                            const data = await res.json();
+                            if (data.text) {
+                              setReportPreview({ type: 'principal', text: data.text });
+                            }
+                          } catch(err) { alert('Hata oluştu'); }
+                          e.currentTarget.innerHTML = "<span>📋</span> Müdür Raporu";
+                        }} style={{ padding: '0.5rem 1rem', background: 'linear-gradient(135deg, var(--accent), var(--primary))', color: 'white', border: 'none', borderRadius: 'var(--radius-md)', cursor: 'pointer', fontWeight: 600, fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                          <span>📋</span> Müdür Raporu
+                        </button>
+                      </div>
+                      
+                      <button onClick={async () => {
+                        if (confirm('Bu seans notunu silmek istediğinize emin misiniz?')) {
+                          const { deleteSession } = await import('../../actions/student');
+                          await deleteSession(session.id, initialStudent.id);
+                          router.refresh();
+                        }
+                      }} style={{ padding: '0.4rem 0.8rem', background: 'none', color: 'var(--danger)', border: 'none', borderRadius: 'var(--radius-md)', cursor: 'pointer', fontWeight: 700, fontSize: '0.85rem' }}>Sil</button>
+                    </div>
+                  </div>
+                )) : (
+                  <p style={{ textAlign: 'center', color: 'var(--text-secondary)', padding: '2rem', background: 'var(--bg-main)', borderRadius: '12px' }}>Henüz geçmiş bir seans bulunmuyor.</p>
+                )}
+              </div>
+            </div>
+            {/* ZİNCİRLEME İŞ AKIŞI BİTİŞİ */}
+            
           </div>
         </div>
       )}
@@ -2128,51 +2308,102 @@ export default function ClientPage({ initialStudent }: { initialStudent: any }) 
       )}
 
       {activeTab === 'psikoloji' && (
-        <section style={{ animation: 'fadeIn 0.3s' }}>
+        <section style={{ animation: 'fadeInSlideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-            <h2 style={{ fontSize: '1.25rem', fontWeight: 700 }}>🧠 Psikoloji ve Kariyer Analizi</h2>
-            <button className="btn-primary" onClick={() => {
-              const anxiety = prompt("Sınav Kaygısı Seviyesi (1-10):", "5");
-              const motivation = prompt("Motivasyon Seviyesi (1-10):", "5");
-              const focus = prompt("Odak / Dikkat Seviyesi (1-10):", "5");
-              const note = prompt("Koç Notu:", "");
-              if(anxiety && motivation && focus) {
-                fetch('/api/psycho-record', {
-                  method: 'POST',
-                  headers: {'Content-Type': 'application/json'},
-                  body: JSON.stringify({ studentId: initialStudent.id, anxietyLevel: parseInt(anxiety), motivationLevel: parseInt(motivation), focusLevel: parseInt(focus), coachNote: note })
-                }).then(() => window.location.reload());
-              }
-            }}>
-              + Yeni Değerlendirme Ekle
-            </button>
+            <h2 style={{ fontSize: '1.4rem', fontWeight: 800, color: 'var(--text-primary)' }}>🧠 Psikoloji ve Kariyer Analizi</h2>
+            {!showPsychoForm && (
+              <button className="btn-primary" onClick={() => setShowPsychoForm(true)}>
+                + Yeni Değerlendirme Ekle
+              </button>
+            )}
           </div>
+          
+          {showPsychoForm && (
+            <div className="card fade-in" style={{ marginBottom: '2rem', border: '1px solid var(--primary)', background: '#F4FBF7' }}>
+              <h3 style={{ fontSize: '1.1rem', fontWeight: 800, color: 'var(--primary)', marginBottom: '1.5rem' }}>Yeni Psikolojik Gözlem</h3>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1.5rem', marginBottom: '1.5rem' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '0.5rem' }}>Kaygı Seviyesi (1-10)</label>
+                  <input type="number" min="1" max="10" value={psychoForm.anxiety} onChange={e => setPsychoForm({...psychoForm, anxiety: parseInt(e.target.value) || 5})} style={{ width: '100%', padding: '0.75rem', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)' }} />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '0.5rem' }}>Motivasyon (1-10)</label>
+                  <input type="number" min="1" max="10" value={psychoForm.motivation} onChange={e => setPsychoForm({...psychoForm, motivation: parseInt(e.target.value) || 5})} style={{ width: '100%', padding: '0.75rem', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)' }} />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '0.5rem' }}>Odaklanma (1-10)</label>
+                  <input type="number" min="1" max="10" value={psychoForm.focus} onChange={e => setPsychoForm({...psychoForm, focus: parseInt(e.target.value) || 5})} style={{ width: '100%', padding: '0.75rem', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)' }} />
+                </div>
+              </div>
+              <div style={{ marginBottom: '1.5rem' }}>
+                <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '0.5rem' }}>Görüşme Notları (Kariyer Hedefi, PDR Analizi)</label>
+                <textarea rows={3} value={psychoForm.note} onChange={e => setPsychoForm({...psychoForm, note: e.target.value})} placeholder="Öğrencinin bu haftaki mental durumu ve kariyer hedefleri..." style={{ width: '100%', padding: '0.75rem', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', resize: 'vertical' }} />
+              </div>
+              <div style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end' }}>
+                <button className="btn" onClick={() => setShowPsychoForm(false)} style={{ background: 'transparent', color: 'var(--text-secondary)', border: '1px solid var(--border)', padding: '0.75rem 1.5rem', borderRadius: 'var(--radius-sm)', fontWeight: 600 }}>İptal</button>
+                <button className="btn-primary" onClick={() => {
+                  fetch('/api/psycho-record', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ studentId: initialStudent.id, anxietyLevel: psychoForm.anxiety, motivationLevel: psychoForm.motivation, focusLevel: psychoForm.focus, coachNote: psychoForm.note })
+                  }).then(() => window.location.reload());
+                }} style={{ borderRadius: 'var(--radius-sm)' }}>Kaydet</button>
+              </div>
+            </div>
+          )}
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem' }}>
-            <div className="card">
-              <h3 style={{ fontSize: '1.1rem', marginBottom: '1rem', borderBottom: '1px solid var(--border)', paddingBottom: '0.5rem' }}>Geçmiş Değerlendirmeler</h3>
+          <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: '2rem' }}>
+            <div className="card" style={{ padding: '2rem', background: 'linear-gradient(145deg, rgba(255,255,255,1) 0%, rgba(248,250,252,1) 100%)', boxShadow: '0 10px 30px rgba(0,0,0,0.05)', border: '1px solid rgba(0,0,0,0.05)' }}>
+              <h3 style={{ fontSize: '1.2rem', fontWeight: 800, marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-primary)' }}>
+                <span style={{ fontSize: '1.4rem' }}>⏳</span> Geçmiş PDR Gözlem Kayıtları
+              </h3>
               {(!initialStudent.psychoRecords || initialStudent.psychoRecords.length === 0) ? (
-                <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>Henüz değerlendirme yapılmamış.</p>
+                <div style={{ textAlign: 'center', padding: '3rem', background: 'var(--bg-main)', borderRadius: '12px', color: 'var(--text-muted)' }}>
+                  <div style={{ fontSize: '3rem', opacity: 0.5, marginBottom: '1rem' }}>📭</div>
+                  <p style={{ fontWeight: 600 }}>Öğrenciye ait herhangi bir psikolojik gözlem bulunamadı.</p>
+                </div>
               ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                  {initialStudent.psychoRecords.map((rec:any) => (
-                    <div key={rec.id} style={{ border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '1rem' }}>
-                      <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '0.5rem' }}>{new Date(rec.date).toLocaleDateString('tr-TR')}</div>
-                      <div style={{ display: 'flex', gap: '1rem', marginBottom: '0.5rem' }}>
-                        <div style={{ flex: 1, background: 'var(--bg-main)', padding: '0.5rem', borderRadius: '4px', textAlign: 'center' }}>
-                          <div style={{ fontSize: '0.75rem', textTransform: 'uppercase' }}>Kaygı</div>
-                          <div style={{ fontSize: '1.2rem', fontWeight: 'bold', color: rec.anxietyLevel > 7 ? 'var(--danger)' : 'var(--text-primary)' }}>{rec.anxietyLevel}/10</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                  {initialStudent.psychoRecords.map((rec:any, idx: number) => (
+                    <div key={rec.id} style={{ 
+                      background: 'white', 
+                      border: '1px solid var(--border)', 
+                      borderRadius: 'var(--radius-lg)', 
+                      padding: '1.5rem',
+                      boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)',
+                      position: 'relative',
+                      overflow: 'hidden'
+                    }}>
+                      {idx === 0 && <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '4px', background: 'linear-gradient(90deg, var(--primary), var(--secondary))' }} />}
+                      
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                        <span style={{ fontSize: '0.85rem', fontWeight: 800, color: 'var(--primary)', background: 'rgba(59, 130, 246, 0.1)', padding: '0.3rem 0.8rem', borderRadius: '20px' }}>
+                          {new Date(rec.date).toLocaleDateString('tr-TR')}
+                        </span>
+                        {idx === 0 && <span style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--success)' }}>🌟 En Güncel Durum</span>}
+                      </div>
+
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem', marginBottom: '1rem' }}>
+                        <div style={{ background: rec.anxietyLevel > 7 ? 'rgba(239, 68, 68, 0.05)' : 'var(--bg-main)', border: rec.anxietyLevel > 7 ? '1px solid rgba(239, 68, 68, 0.2)' : '1px solid transparent', padding: '1rem', borderRadius: '12px', textAlign: 'center', transition: 'all 0.2s' }}>
+                          <div style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Kaygı (Stres)</div>
+                          <div style={{ fontSize: '1.6rem', fontWeight: 900, color: rec.anxietyLevel > 7 ? 'var(--danger)' : 'var(--text-primary)', marginTop: '0.25rem' }}>{rec.anxietyLevel}/10</div>
                         </div>
-                        <div style={{ flex: 1, background: 'var(--bg-main)', padding: '0.5rem', borderRadius: '4px', textAlign: 'center' }}>
-                          <div style={{ fontSize: '0.75rem', textTransform: 'uppercase' }}>Motivasyon</div>
-                          <div style={{ fontSize: '1.2rem', fontWeight: 'bold', color: rec.motivationLevel < 4 ? 'var(--danger)' : 'var(--text-primary)' }}>{rec.motivationLevel}/10</div>
+                        <div style={{ background: rec.motivationLevel < 4 ? 'rgba(245, 158, 11, 0.05)' : 'var(--bg-main)', border: rec.motivationLevel < 4 ? '1px solid rgba(245, 158, 11, 0.2)' : '1px solid transparent', padding: '1rem', borderRadius: '12px', textAlign: 'center', transition: 'all 0.2s' }}>
+                          <div style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Motivasyon</div>
+                          <div style={{ fontSize: '1.6rem', fontWeight: 900, color: rec.motivationLevel < 4 ? '#D97706' : 'var(--text-primary)', marginTop: '0.25rem' }}>{rec.motivationLevel}/10</div>
                         </div>
-                        <div style={{ flex: 1, background: 'var(--bg-main)', padding: '0.5rem', borderRadius: '4px', textAlign: 'center' }}>
-                          <div style={{ fontSize: '0.75rem', textTransform: 'uppercase' }}>Odak</div>
-                          <div style={{ fontSize: '1.2rem', fontWeight: 'bold' }}>{rec.focusLevel}/10</div>
+                        <div style={{ background: 'var(--bg-main)', padding: '1rem', borderRadius: '12px', textAlign: 'center' }}>
+                          <div style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Odaklanma</div>
+                          <div style={{ fontSize: '1.6rem', fontWeight: 900, color: 'var(--text-primary)', marginTop: '0.25rem' }}>{rec.focusLevel}/10</div>
                         </div>
                       </div>
-                      {rec.coachNote && <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', fontStyle: 'italic' }}>"{rec.coachNote}"</div>}
+
+                      {rec.coachNote && (
+                        <div style={{ padding: '1rem', background: '#F8FAFC', borderRadius: '8px', borderLeft: '4px solid var(--primary)' }}>
+                          <div style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--primary)', marginBottom: '0.4rem', textTransform: 'uppercase' }}>PDR Uzmanı Notu</div>
+                          <div style={{ fontSize: '0.95rem', color: 'var(--text-primary)', lineHeight: 1.6, fontStyle: 'italic' }}>"{rec.coachNote}"</div>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -2218,6 +2449,60 @@ export default function ClientPage({ initialStudent }: { initialStudent: any }) 
               </div>
             </div>
             <div style={{ padding: '2rem', color: 'black', fontFamily: 'sans-serif' }} dangerouslySetInnerHTML={{ __html: worksheetHtml }} />
+          </div>
+        </div>
+      )}
+
+      {/* AI Report Preview & Edit Modal */}
+      {reportPreview && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 11000, padding: '2rem' }}>
+          <div className="card" style={{ background: 'white', borderRadius: 'var(--radius-lg)', width: '600px', maxWidth: '100%', display: 'flex', flexDirection: 'column', animation: 'fadeInSlideUp 0.3s ease-out' }}>
+            <div style={{ padding: '1.5rem', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h3 style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                {reportPreview.type === 'parent' ? '💬 Veli Mesajı Düzenleme' : '📋 Kurumsal Rapor Düzenleme'}
+              </h3>
+              <button onClick={() => setReportPreview(null)} style={{ background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer', color: 'var(--text-secondary)' }}>&times;</button>
+            </div>
+            
+            <div style={{ padding: '1.5rem' }}>
+              <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '1rem' }}>
+                Yapay zeka tarafından hazırlanan metin aşağıdadır. Göndermeden veya kopyalamadan önce üzerinde dilediğiniz değişikliği yapabilirsiniz.
+              </p>
+              <textarea 
+                value={reportPreview.text}
+                onChange={(e) => setReportPreview({ ...reportPreview, text: e.target.value })}
+                style={{ width: '100%', height: '300px', padding: '1rem', borderRadius: 'var(--radius-md)', border: '2px solid var(--border)', fontSize: '0.95rem', lineHeight: '1.6', resize: 'vertical' }}
+              />
+            </div>
+
+            <div style={{ padding: '1.5rem', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'flex-end', gap: '1rem', background: 'var(--bg-main)', borderBottomLeftRadius: 'var(--radius-lg)', borderBottomRightRadius: 'var(--radius-lg)' }}>
+              <button onClick={() => setReportPreview(null)} className="btn-secondary">İptal</button>
+              
+              {reportPreview.type === 'parent' ? (
+                <button 
+                  className="btn-primary" 
+                  style={{ background: '#25D366' }}
+                  onClick={() => {
+                    const url = `https://wa.me/?text=${encodeURIComponent(reportPreview.text)}`;
+                    window.open(url, '_blank');
+                    setReportPreview(null);
+                  }}
+                >
+                  Whatsapp'a Aktar ve Gönder
+                </button>
+              ) : (
+                <button 
+                  className="btn-primary" 
+                  onClick={() => {
+                    navigator.clipboard.writeText(reportPreview.text);
+                    alert('✅ Rapor metni başarıyla panoya kopyalandı! İstediğiniz yere yapıştırabilirsiniz.');
+                    setReportPreview(null);
+                  }}
+                >
+                  Panoya Kopyala
+                </button>
+              )}
+            </div>
           </div>
         </div>
       )}

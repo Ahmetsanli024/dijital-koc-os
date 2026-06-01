@@ -62,12 +62,9 @@ export default async function RootLayout({
           <p style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '1rem', paddingLeft: '1rem' }}>Sistem Modülleri</p>
           
           <nav style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-            <NavLink href="/" icon="📊" text="Komuta Merkezi" />
-            <NavLink href="/students" icon="🧑‍🎓" text="Öğrenci Envanteri" />
-            <NavLink href="/upload-exam" icon="📸" text="Sınav Okuma (AI)" />
-            <NavLink href="/assignments" icon="📝" text="Görev & Ödev" />
-            <NavLink href="/sessions" icon="🤝" text="Seans Notları" />
-            <NavLink href="/parents" icon="💬" text="Veli İletişimi" />
+            <NavLink href="/" icon="🎛️" text="Ana Operasyon Paneli" />
+            <NavLink href="/students" icon="🧑‍🎓" text="Dijital Öğrenci Envanteri" />
+            <NavLink href="/upload-exam" icon="📸" text="Optik Veri Aktarım (AI)" />
           </nav>
           
           <div style={{ marginTop: 'auto', padding: '1rem', background: 'var(--bg-main)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)' }}>
