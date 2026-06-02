@@ -686,34 +686,6 @@ export default function ClientPage({ initialStudent }: { initialStudent: any }) 
           </div>
         </div>
 
-        {/* Middle Side: Milestones & Progress */}
-        <div className="card" style={{ flex: 1.2, padding: '1.5rem', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-          <div>
-            <h3 style={{ fontSize: '0.85rem', fontWeight: 800, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>📊 Süreç Kilometre Taşları</h3>
-            <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>Koçluk hedefleri ve sınav geri sayımı.</p>
-          </div>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', margin: '1rem 0' }}>
-            <div style={{ background: 'var(--bg-main)', padding: '0.8rem', borderRadius: '10px', border: '1px solid var(--border)' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '0.4rem' }}>
-                <span>🤝 SEANS İLERLEMESİ</span>
-                <span>{completedSessions}/{totalSessions} (%{sessionProgressPct})</span>
-              </div>
-              <div style={{ height: '8px', background: 'var(--border)', borderRadius: '4px', overflow: 'hidden' }}>
-                <div style={{ width: `${Math.min(sessionProgressPct, 100)}%`, height: '100%', background: 'linear-gradient(90deg, var(--secondary), var(--success))' }} />
-              </div>
-            </div>
-
-            <div style={{ background: 'var(--bg-main)', padding: '0.8rem', borderRadius: '10px', border: '1px solid var(--border)', display: 'flex', justifyItems: 'center', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div>
-                <span style={{ display: 'block', fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 800 }}>Kalan Gün</span>
-                <span style={{ fontSize: '1.4rem', fontWeight: 900, color: 'var(--text-primary)' }}>{countdown.days > 0 ? countdown.days : '0'} Gün</span>
-              </div>
-              <span style={{ fontSize: '0.75rem', padding: '0.2rem 0.5rem', borderRadius: '4px', background: 'var(--primary)', color: 'white', fontWeight: 800 }}>{countdown.examName}</span>
-            </div>
-          </div>
-        </div>
-
         {/* Right Side: Quick Assignment Planner */}
         <div className="card" style={{ flex: 1.8, padding: '1.5rem', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', background: 'linear-gradient(135deg, rgba(30,58,138,0.02), rgba(30,58,138,0.05))', border: '1px solid rgba(30,58,138,0.1)' }}>
           <div>
@@ -767,21 +739,6 @@ export default function ClientPage({ initialStudent }: { initialStudent: any }) 
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
             <h2 style={{ fontSize: '1.25rem', fontWeight: 700 }}>Arşivdeki Sınav Karneleri</h2>
             <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
-              <select 
-                value={selectedPublisher} 
-                onChange={(e) => setSelectedPublisher(e.target.value)}
-                style={{ padding: '0.75rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'white' }}>
-                <option value="">Yayın Evi Seçin (Opsiyonel)</option>
-                <option value="Hız Yayınları">Hız Yayınları</option>
-                <option value="Okyanus">Okyanus</option>
-                <option value="Nitelik">Nitelik</option>
-                <option value="Özdebir">Özdebir</option>
-                <option value="Töder">Töder</option>
-                <option value="Mozaik">Mozaik</option>
-                <option value="Sinan Kuzucu">Sinan Kuzucu</option>
-                <option value="Nartest">Nartest</option>
-                <option value="Kurumsal">Kurumsal (Diğer)</option>
-              </select>
               <label className="btn-primary" style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'var(--primary)', padding: '0.75rem 1.5rem', borderRadius: 'var(--radius-md)', color: 'white', fontWeight: 600, opacity: isUploading ? 0.7 : 1 }}>
                 <input type="file" accept=".pdf" style={{ display: 'none' }} onChange={handleUpload} disabled={isUploading} />
                 <span>{isUploading ? 'Yükleniyor...' : '+ Yeni Karne Yükle'}</span>

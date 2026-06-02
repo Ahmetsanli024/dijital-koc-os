@@ -4,7 +4,7 @@ import { GoogleGenAI, Type, Schema } from '@google/genai';
 const pdfModule = require('pdf-parse');
 const pdf = typeof pdfModule === 'function' ? pdfModule : (pdfModule.default || pdfModule);
 
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' });
 
 // Null byte ve bozuk karakterleri temizle
 function cleanPdfText(text: string): string {
@@ -21,6 +21,10 @@ export async function POST(req: Request) {
 
     if (!file) {
       return NextResponse.json({ error: 'Dosya seçilmedi.' }, { status: 400 });
+    }
+
+    if (!process.env.GEMINI_API_KEY || process.env.GEMINI_API_KEY === 'YOUR_API_KEY_HERE') {
+      return NextResponse.json({ error: 'GEMINI_API_KEY tanımlı değil. .env.local dosyanızı kontrol edin.' }, { status: 500 });
     }
 
     // PDF'i oku
@@ -43,6 +47,7 @@ export async function POST(req: Request) {
     const prompt = `Aşağıda bir LGS deneme sınavı (veya benzeri) analiz raporunun OCR ile okunmuş ham metni bulunmaktadır.
 Senden bu metni detaylıca analiz etmeni ve sonuçları JSON formatında vermeni istiyorum.
 Çıkarman gereken bilgiler:
+0. Öğrencinin Adı Soyadı (studentName): Belgede "Öğrenci:", "Ad Soyad:", "Adı Soyadı:" veya başlık kısmında geçen öğrenci adını bul. Bulamazsan boş string döndür.
 1. Sınavın Adı (Eğer metinde "Sınav Adı: X" veya "X Denemesi" gibi bir ibare varsa. Yoksa dosya adından yola çıkarak mantıklı bir isim uydur, örneğin "Son Sınav").
 2. Sınav genelindeki toplam Doğru (totalCorrect), Yanlış (totalIncorrect), Boş (totalBlank) ve Net (totalNet) sayıları. Bu sayılar genellikle sayfanın en altında veya "TOPLAM" satırında yer alır.
 3. TÜRKÇE, MATEMATİK, FEN BİLİMLERİ, T.C. İNKILAP TARİHİ, İNGİLİZCE, DİN KÜLTÜRÜ derslerinin her biri için ayrı ayrı Doğru, Yanlış, Boş ve Net sayıları.
@@ -57,6 +62,7 @@ ${rawText}`;
     const responseSchema: Schema = {
       type: Type.OBJECT,
       properties: {
+        studentName: { type: Type.STRING, description: 'Öğrencinin adı soyadı (bulunamazsa boş string)' },
         examName: { type: Type.STRING, description: 'Sınavın adı' },
         totalNet: { type: Type.NUMBER, description: 'Toplam Net' },
         totalCorrect: { type: Type.NUMBER, description: 'Toplam Doğru' },
@@ -114,17 +120,18 @@ ${rawText}`;
 
     const aiData = JSON.parse(response.text);
 
-    return NextResponse.json({ 
-      success: true, 
+    return NextResponse.json({
+      success: true,
       parsedData: {
         name: aiData.examName || file.name.replace('.pdf', ''),
+        studentName: aiData.studentName || '',
         totalNet: aiData.totalNet || 0,
         totalCorrect: aiData.totalCorrect || 0,
         totalIncorrect: aiData.totalIncorrect || 0,
         totalBlank: aiData.totalBlank || 0,
         subjectDetails: JSON.stringify(aiData.subjects || []),
         rawText
-      } 
+      }
     });
   } catch (error: any) {
     console.error('Parse-exam HATA:', error);

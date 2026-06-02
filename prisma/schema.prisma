@@ -38,6 +38,7 @@ model Student {
   psychoRecords PsychologicalRecord[]
   badges      Badge[]
   books       Book[]
+  payments    Payment[]
 }
 
 model PsychologicalRecord {
@@ -154,6 +155,40 @@ model Appointment {
   status      String   @default("SCHEDULED") // SCHEDULED, COMPLETED, CANCELLED
   
   student     Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+}
+
+model Payment {
+  id          String   @id @default(cuid())
+  studentId   String
+  amount      Float
+  date        DateTime @default(now())
+  type        String   @default("SESSION") // SESSION, MONTHLY, EXAM, OTHER
+  status      String   @default("PENDING") // PENDING, PAID, OVERDUE
+  note        String?
+  student     Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+}
+
+model Lead {
+  id             String    @id @default(cuid())
+  name           String
+  phone          String?
+  grade          String?
+  source         String?   // INSTAGRAM, REFERRAL, WEBSITE, OTHER
+  status         String    @default("NEW") // NEW, CONTACTED, DEMO, CONVERTED, LOST
+  notes          String?
+  followUpDate   DateTime?
+  createdAt      DateTime  @default(now())
+}
+
+model CoachSettings {
+  id              String  @id @default("default")
+  coachName       String  @default("Ahmet ŞANLI")
+  coachTitle      String  @default("Eğitim Koçu")
+  phone           String?
+  email           String?
+  lgsExamDate     String  @default("2026-06-13")
+  sessionFee      Float   @default(0)
+  sessionDuration Int     @default(45)
 }
 
 model Book {

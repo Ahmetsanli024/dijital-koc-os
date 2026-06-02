@@ -4,217 +4,209 @@ import Link from 'next/link';
 import DashboardChartsClient from './DashboardChartsClient';
 import DashboardQuickActions from './components/DashboardQuickActions';
 import AiCommandCenter from './components/AiCommandCenter';
-import LgsSimulatorWidget from './components/LgsSimulatorWidget';
 
 export default async function Home() {
   const students = await prisma.student.findMany({
     orderBy: { firstName: 'asc' },
     include: {
-      exams: { orderBy: { date: 'desc' } },
-      parentComms: { orderBy: { date: 'desc' } },
-      schedules: {
-        where: { status: 'ACTIVE' },
-        include: { tasks: true }
-      },
-      psychoRecords: { orderBy: { date: 'desc' } },
+      exams:        { orderBy: { date: 'desc' } },
+      parentComms:  { orderBy: { date: 'desc' } },
+      schedules:    { where: { status: 'ACTIVE' }, include: { tasks: true } },
+      psychoRecords:{ orderBy: { date: 'desc' } },
       appointments: { orderBy: { date: 'asc' } },
-      sessions: { select: { id: true } }
-    }
+      sessions:     { orderBy: { date: 'desc' }, take: 1 },
+    },
   });
 
-  const today = new Date();
-  const lgsDate = new Date('2026-06-13T00:00:00');
-  const lgsDaysLeft = Math.ceil((lgsDate.getTime() - today.getTime()) / (1000 * 3600 * 24));
-  
-  // 1. Appointments for today
-  const todayAppts = students.flatMap(s => 
-    s.appointments.filter(a => {
-      const apptDate = new Date(a.date);
-      return apptDate.getDate() === today.getDate() && 
-             apptDate.getMonth() === today.getMonth() && 
-             apptDate.getFullYear() === today.getFullYear();
-    }).map(a => ({ ...a, student: s }))
-  ).sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  const today    = new Date();
+  const lgsDate  = new Date('2026-06-13T00:00:00');
+  const lgsDays  = Math.ceil((lgsDate.getTime() - today.getTime()) / 86_400_000);
 
+  // ── Bugünkü seanslar ─────────────────────────────────────────
+  const todayAppts = students
+    .flatMap(s => s.appointments
+      .filter(a => {
+        const d = new Date(a.date);
+        return d.getDate() === today.getDate() && d.getMonth() === today.getMonth() && d.getFullYear() === today.getFullYear();
+      })
+      .map(a => ({ ...a, student: s }))
+    )
+    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
-
-  // 3. Psycho Alerts (Anxiety > 7 or Motivation < 4 in recent record)
+  // ── Risk sinyalleri ──────────────────────────────────────────
   const psychoAlerts = students.filter(s => {
-    if (s.psychoRecords.length === 0) return false;
-    const latest = s.psychoRecords[0];
-    return latest.anxietyLevel > 7 || latest.motivationLevel < 4;
+    if (!s.psychoRecords.length) return false;
+    const r = s.psychoRecords[0];
+    return r.anxietyLevel > 7 || r.motivationLevel < 4;
   });
 
-  // 4. Performance Drop
-  const performanceAlerts = students.filter(s => {
-    if (s.exams.length < 2) return false;
-    return s.exams[0].totalNet < s.exams[1].totalNet - 5;
+  const performanceAlerts = students.filter(s =>
+    s.exams.length >= 2 && s.exams[0].totalNet < s.exams[1].totalNet - 5
+  );
+
+  const inactiveStudents = students.filter(s => {
+    if (!s.sessions.length) return true;
+    const last = new Date(s.sessions[0].date);
+    return (today.getTime() - last.getTime()) / 86_400_000 > 10;
   });
 
-
-
-  // 5. Parent Comm Alerts (> 14 days)
   const communicationAlerts = students.filter(s => {
-    if (s.parentComms.length === 0) return true;
-    const lastCommDate = new Date(s.parentComms[0].date);
-    const diffDays = Math.floor((today.getTime() - lastCommDate.getTime()) / (1000 * 3600 * 24));
-    return diffDays > 14;
+    if (!s.parentComms.length) return true;
+    return (today.getTime() - new Date(s.parentComms[0].date).getTime()) / 86_400_000 > 14;
   });
 
-  // 6. Calculate Leaderboard (ranking students by solved questions from active schedules)
+  // ── Program tamamlanma oranı ─────────────────────────────────
+  const programStats = students.reduce((acc, s) => {
+    for (const sch of s.schedules) {
+      for (const t of sch.tasks) {
+        acc.total  += t.questionCount;
+        acc.solved += t.solvedQuestions;
+      }
+    }
+    return acc;
+  }, { total: 0, solved: 0 });
+  const completionRate = programStats.total > 0 ? Math.round((programStats.solved / programStats.total) * 100) : 0;
+
+  // ── Leaderboard ──────────────────────────────────────────────
   const activeSchedules = await prisma.schedule.findMany({
     where: { status: 'ACTIVE' },
-    include: {
-      student: true,
-      tasks: true
-    }
+    include: { student: true, tasks: true },
   });
-
-  const leaderboardMap: { [studentId: string]: { name: string; solved: number; target: number } } = {};
-  for (const schedule of activeSchedules) {
-    const sId = schedule.studentId;
-    if (!leaderboardMap[sId]) {
-      leaderboardMap[sId] = {
-        name: `${schedule.student.firstName} ${schedule.student.lastName}`,
-        solved: 0,
-        target: 0
-      };
-    }
-    for (const task of schedule.tasks) {
-      leaderboardMap[sId].solved += task.solvedQuestions;
-      leaderboardMap[sId].target += task.questionCount;
-    }
+  const lbMap: Record<string, { name: string; solved: number; target: number }> = {};
+  for (const s of activeSchedules) {
+    if (!lbMap[s.studentId]) lbMap[s.studentId] = { name: `${s.student.firstName} ${s.student.lastName}`, solved: 0, target: 0 };
+    for (const t of s.tasks) { lbMap[s.studentId].solved += t.solvedQuestions; lbMap[s.studentId].target += t.questionCount; }
   }
+  const leaderboard = Object.entries(lbMap).map(([id, v]) => ({ id, ...v })).sort((a, b) => b.solved - a.solved);
 
-  const leaderboard = Object.entries(leaderboardMap)
-    .map(([id, info]) => ({
-      id,
-      ...info
-    }))
-    .sort((a, b) => b.solved - a.solved);
-
-  // 7. Calculate Group Exam Net Average Trend
-  const allExams = await prisma.exam.findMany({
-    orderBy: { date: 'asc' }
-  });
-
-  const examGroups: { [name: string]: { totalNetSum: number; count: number; date: Date } } = {};
-  for (const exam of allExams) {
-    const key = exam.name;
-    if (!examGroups[key]) {
-      examGroups[key] = {
-        totalNetSum: 0,
-        count: 0,
-        date: new Date(exam.date)
-      };
-    }
-    examGroups[key].totalNetSum += exam.totalNet;
-    examGroups[key].count += 1;
-    if (new Date(exam.date) < examGroups[key].date) {
-      examGroups[key].date = new Date(exam.date);
-    }
+  // ── Grup sınav trendi ────────────────────────────────────────
+  const allExams = await prisma.exam.findMany({ orderBy: { date: 'asc' } });
+  const eg: Record<string, { sum: number; count: number; date: Date }> = {};
+  for (const e of allExams) {
+    if (!eg[e.name]) eg[e.name] = { sum: 0, count: 0, date: new Date(e.date) };
+    eg[e.name].sum += e.totalNet; eg[e.name].count++;
+    if (new Date(e.date) < eg[e.name].date) eg[e.name].date = new Date(e.date);
   }
-
-  const groupExamTrend = Object.entries(examGroups)
-    .map(([name, data]) => ({
-      name,
-      Ortalama: Math.round((data.totalNetSum / data.count) * 100) / 100,
-      date: data.date
-    }))
+  const groupExamTrend = Object.entries(eg)
+    .map(([name, d]) => ({ name, Ortalama: Math.round((d.sum / d.count) * 100) / 100, date: d.date }))
     .sort((a, b) => a.date.getTime() - b.date.getTime())
     .map(({ name, Ortalama }) => ({ name, Ortalama }));
 
+  const totalAlerts = psychoAlerts.length + performanceAlerts.length;
+  const weekDay = today.toLocaleDateString('tr-TR', { weekday: 'long' });
+  const dateStr = today.toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' });
+
+  // ── Stiller ─────────────────────────────────────────────────
+  const alertCard = (color: string, bg: string, border: string): React.CSSProperties => ({
+    padding: '1rem 1.25rem', background: bg, border: `1px solid ${border}`,
+    borderLeft: `4px solid ${color}`, borderRadius: '8px',
+    display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '1rem',
+  });
+  const statCard = (accent: string): React.CSSProperties => ({
+    background: 'white', border: '1px solid var(--border)', borderRadius: '10px',
+    padding: '1.25rem 1.5rem', display: 'flex', flexDirection: 'column', gap: '0.25rem',
+    borderTop: `3px solid ${accent}`,
+  });
+  const linkBtn: React.CSSProperties = {
+    padding: '0.35rem 0.75rem', borderRadius: '6px', fontWeight: 700,
+    textDecoration: 'none', fontSize: '0.78rem', whiteSpace: 'nowrap',
+  };
+
   return (
-    <main style={{ maxWidth: '1400px', margin: '0 auto', width: '100%', animation: 'fadeInSlideUp 0.6s cubic-bezier(0.16, 1, 0.3, 1)' }}>
-      {/* Premium Hero Banner */}
-      <header style={{ 
-        marginBottom: '2rem', 
-        background: 'linear-gradient(135deg, #022C22 0%, #064E3B 100%)', 
-        padding: '3rem', 
-        borderRadius: 'var(--radius-lg)', 
-        color: 'white', 
-        display: 'flex', 
-        flexDirection: 'column',
-        gap: '2rem',
-        boxShadow: '0 20px 40px rgba(6, 78, 59, 0.25)',
-        position: 'relative',
-        overflow: 'hidden'
+    <div style={{ maxWidth: '1280px', width: '100%' }}>
+
+      {/* ── SABAH BRİFİNGİ ──────────────────────────────────── */}
+      <div style={{
+        background: 'linear-gradient(135deg, #1E3A8A 0%, #1e40af 100%)',
+        borderRadius: '12px', padding: '2rem 2.5rem', marginBottom: '1.5rem',
+        color: 'white', position: 'relative', overflow: 'hidden',
       }}>
-        {/* Decorative background element */}
-        <div style={{ position: 'absolute', top: '-50%', right: '-10%', width: '600px', height: '600px', background: 'radial-gradient(circle, rgba(16,185,129,0.15) 0%, rgba(0,0,0,0) 70%)', borderRadius: '50%', pointerEvents: 'none' }} />
+        <div style={{ position: 'absolute', right: '-40px', top: '-40px', width: '220px', height: '220px', borderRadius: '50%', background: 'rgba(255,255,255,0.05)' }} />
+        <div style={{ position: 'absolute', right: '60px', bottom: '-30px', width: '120px', height: '120px', borderRadius: '50%', background: 'rgba(255,255,255,0.04)' }} />
 
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', zIndex: 1, flexWrap: 'wrap', gap: '2rem' }}>
-          <div style={{ flex: '1 1 500px' }}>
-            <div style={{ fontSize: '0.9rem', color: '#6EE7B7', textTransform: 'uppercase', letterSpacing: '0.15em', fontWeight: 700, marginBottom: '0.5rem' }}>
-              {today.toLocaleDateString('tr-TR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1.5rem', position: 'relative' }}>
+          <div style={{ flex: 1, minWidth: '280px' }}>
+            <div style={{ fontSize: '0.78rem', fontWeight: 600, color: 'rgba(255,255,255,0.65)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '0.4rem' }}>
+              {weekDay}, {dateStr}
             </div>
-            <h1 style={{ fontSize: '3rem', fontWeight: 900, marginBottom: '0.5rem', letterSpacing: '-0.04em', color: '#FFFFFF' }}>
-              Ana Operasyon Paneli
+            <h1 style={{ fontSize: '1.85rem', fontWeight: 800, color: 'white', marginBottom: '0.5rem', letterSpacing: '-0.02em' }}>
+              Günaydın, Ahmet Bey 👋
             </h1>
-            <p style={{ color: '#A7F3D0', fontSize: '1.15rem', maxWidth: '600px', lineHeight: 1.6, fontWeight: 300, marginBottom: '2rem' }}>
-              Bugün <strong>{todayAppts.length}</strong> öğrenciyle seansınız var. Sistem, dikkat etmeniz gereken <strong>{psychoAlerts.length + performanceAlerts.length}</strong> riskli durum tespit etti.
+            <p style={{ color: 'rgba(255,255,255,0.75)', fontSize: '0.95rem', lineHeight: 1.6, marginBottom: '1.5rem' }}>
+              Bugün <strong style={{ color: 'white' }}>{todayAppts.length} öğrenci</strong> ile koçluk seansınız var.
+              {totalAlerts > 0 && <> <strong style={{ color: '#FCA5A5' }}>{totalAlerts} öğrenci</strong> öncelikli ilgi bekliyor.</>}
             </p>
-
-            {/* YZ Destekli Komuta Merkezi */}
             <AiCommandCenter />
           </div>
 
-          {/* LGS/YKS Countdown Widget */}
-          <div style={{ 
-            background: 'linear-gradient(135deg, rgba(255,255,255,0.1), rgba(255,255,255,0.05))',
-            border: '1px solid rgba(255,255,255,0.2)',
-            padding: '1.5rem 2.5rem',
-            borderRadius: 'var(--radius-lg)',
-            backdropFilter: 'blur(20px)',
-            textAlign: 'center',
-            boxShadow: '0 10px 25px rgba(0,0,0,0.2)',
-            minWidth: '280px'
+          {/* LGS Geri Sayım */}
+          <div style={{
+            background: 'rgba(255,255,255,0.1)', borderRadius: '10px',
+            border: '1px solid rgba(255,255,255,0.18)', padding: '1.25rem 2rem',
+            textAlign: 'center', backdropFilter: 'blur(12px)', flexShrink: 0,
           }}>
-            <h3 style={{ fontSize: '0.9rem', textTransform: 'uppercase', letterSpacing: '0.1em', color: '#6EE7B7', fontWeight: 800, marginBottom: '0.5rem' }}>Büyük Sınava (2026) Son</h3>
-            <div style={{ fontSize: '4rem', fontWeight: 900, color: 'white', lineHeight: 1, marginBottom: '0.2rem', textShadow: '0 4px 10px rgba(0,0,0,0.3)' }}>
-              {lgsDaysLeft}
-            </div>
-            <div style={{ fontSize: '1rem', fontWeight: 600, color: '#A7F3D0' }}>GÜN KALDI</div>
+            <div style={{ fontSize: '0.7rem', fontWeight: 700, color: 'rgba(255,255,255,0.6)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '0.35rem' }}>LGS 2026 — Kalan Süre</div>
+            <div style={{ fontSize: '3.5rem', fontWeight: 900, lineHeight: 1, color: 'white' }}>{lgsDays}</div>
+            <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'rgba(255,255,255,0.7)', marginTop: '0.25rem' }}>gün</div>
           </div>
         </div>
 
-        {/* Quick Actions Glass Bar */}
-        <DashboardQuickActions students={students} />
-      </header>
+        {/* Hızlı Aksiyonlar */}
+        <div style={{ marginTop: '1.5rem', paddingTop: '1.5rem', borderTop: '1px solid rgba(255,255,255,0.12)', position: 'relative' }}>
+          <DashboardQuickActions students={students} />
+        </div>
+      </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.5fr', gap: '2.5rem' }}>
-        
-        {/* Sol Sütun: Günlük Ajanda Timeline */}
-        <div>
-          <div className="card" style={{ height: '100%', padding: '2.5rem' }}>
-            <h2 style={{ fontSize: '1.4rem', fontWeight: 800, marginBottom: '2rem', display: 'flex', alignItems: 'center', gap: '0.75rem', color: 'var(--text-primary)' }}>
-              <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: 'rgba(16, 185, 129, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#10B981' }}>📅</div>
-              Bugünkü Ajanda
-            </h2>
+      {/* ── ÜST ÖZET KARTLAR ──────────────────────────────────── */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1rem', marginBottom: '1.5rem' }}>
+        {[
+          { label: 'Aktif Öğrenci', value: students.length, sub: 'portföyde', accent: '#2563EB', icon: '👤' },
+          { label: 'Bugünkü Seans', value: todayAppts.length, sub: 'planlandı', accent: '#7C3AED', icon: '📅' },
+          { label: 'Program Tamamlama', value: `%${completionRate}`, sub: 'bu hafta ortalama', accent: '#059669', icon: '📊' },
+          { label: 'Öncelikli Eylem', value: totalAlerts, sub: 'öğrenci ilgi bekliyor', accent: '#DC2626', icon: '⚠️' },
+        ].map(s => (
+          <div key={s.label} style={statCard(s.accent)}>
+            <div style={{ fontSize: '1.3rem' }}>{s.icon}</div>
+            <div style={{ fontSize: '1.8rem', fontWeight: 900, color: 'var(--text-primary)', lineHeight: 1 }}>{s.value}</div>
+            <div style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-secondary)' }}>{s.label}</div>
+            <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{s.sub}</div>
+          </div>
+        ))}
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.4fr', gap: '1.25rem', marginBottom: '1.25rem' }}>
+
+        {/* ── BUGÜNKÜ SEANS TAKVİMİ ─────────────────────────── */}
+        <div style={{ background: 'white', border: '1px solid var(--border)', borderRadius: '12px', overflow: 'hidden' }}>
+          <div style={{ padding: '1rem 1.5rem', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <h2 style={{ fontWeight: 800, fontSize: '0.95rem', color: 'var(--text-primary)' }}>📅 Bugünkü Koçluk Seansları</h2>
+            <Link href="/sessions" style={{ ...linkBtn, background: 'var(--bg-main)', color: 'var(--primary)', border: '1px solid var(--border)' }}>
+              + Randevu Ekle
+            </Link>
+          </div>
+          <div style={{ padding: '1rem' }}>
             {todayAppts.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '4rem 1rem', color: 'var(--text-muted)' }}>
-                <div style={{ fontSize: '4rem', marginBottom: '1.5rem', opacity: 0.5 }}>☕</div>
-                <p style={{ fontSize: '1.1rem', fontWeight: 500 }}>Bugün için planlanmış seans bulunmuyor.</p>
+              <div style={{ padding: '2.5rem 1rem', textAlign: 'center' }}>
+                <div style={{ fontSize: '2rem', marginBottom: '0.75rem' }}>☕</div>
+                <p style={{ color: 'var(--text-muted)', fontWeight: 500, fontSize: '0.88rem' }}>Bugün için planlanmış seans yok.</p>
+                <p style={{ color: 'var(--text-muted)', fontSize: '0.78rem', marginTop: '0.25rem' }}>Randevu eklemek için "Seans Merkezi"ni kullanın.</p>
               </div>
             ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', position: 'relative' }}>
-                <div style={{ position: 'absolute', left: '19px', top: '20px', bottom: '20px', width: '2px', background: 'var(--border)' }} />
-                {todayAppts.map((appt, index) => (
-                  <div key={appt.id} style={{ 
-                    display: 'flex', 
-                    gap: '1.5rem', 
-                    paddingBottom: index === todayAppts.length - 1 ? '0' : '2rem',
-                    position: 'relative',
-                    zIndex: 1
-                  }}>
-                    <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: 'var(--bg-card)', border: '2px solid var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.8rem', fontWeight: 800, color: 'var(--primary)', boxShadow: '0 0 0 4px var(--bg-card)' }}>
-                      {new Date(appt.date).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+                {todayAppts.map(a => (
+                  <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: '0.85rem', padding: '0.75rem 1rem', background: 'var(--bg-main)', borderRadius: '8px', border: '1px solid var(--border)' }}>
+                    <div style={{ background: '#EFF6FF', color: '#2563EB', borderRadius: '6px', padding: '0.3rem 0.5rem', fontWeight: 800, fontSize: '0.75rem', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                      {new Date(a.date).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}
                     </div>
-                    <div style={{ flex: 1, padding: '1.25rem', background: '#F8FAFC', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', transition: 'var(--transition)' }} className="card-hover-item">
-                      <div style={{ fontWeight: 800, fontSize: '1.1rem', color: 'var(--text-primary)', marginBottom: '0.25rem' }}>{appt.student.firstName} {appt.student.lastName}</div>
-                      <div style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>{appt.title}</div>
-                      <Link href={`/students/${appt.student.id}`} style={{ display: 'inline-block', marginTop: '0.75rem', fontSize: '0.85rem', fontWeight: 700, color: 'var(--primary)', textDecoration: 'none' }}>Profile Git →</Link>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontWeight: 700, fontSize: '0.88rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {a.student.firstName} {a.student.lastName}
+                      </div>
+                      <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{a.title} · {a.durationMin} dk</div>
                     </div>
+                    <Link href={`/students/${a.student.id}`} style={{ ...linkBtn, background: '#EFF6FF', color: '#2563EB' }}>
+                      Profile Git →
+                    </Link>
                   </div>
                 ))}
               </div>
@@ -222,97 +214,132 @@ export default async function Home() {
           </div>
         </div>
 
-        {/* Sağ Sütun: Yapay Zeka Analizi ve Acil Durumlar */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '2.5rem' }}>
-          
-          {/* AI Intelligence Board */}
-          <div className="card" style={{ padding: '2.5rem' }}>
-            <h2 style={{ fontSize: '1.4rem', fontWeight: 800, color: 'var(--text-primary)', marginBottom: '2rem', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-              <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: 'rgba(245, 158, 11, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#F59E0B' }}>🧠</div>
-              Koçluk İçgörüleri & Alarmlar
-            </h2>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-              {psychoAlerts.map(s => (
-                <div key={'psy-'+s.id} style={{ 
-                  padding: '1.25rem', 
-                  background: '#FEF3C7', 
-                  borderRadius: 'var(--radius-md)', 
-                  color: '#92400E', 
-                  display: 'flex', 
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  border: '1px solid #FCD34D'
-                }}>
-                  <div>
-                    <div style={{ fontWeight: 800, marginBottom: '0.25rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}><span>⚠️</span> {s.firstName} {s.lastName}</div>
-                    <div style={{ fontSize: '0.9rem', opacity: 0.9 }}>Kaygı düzeyi yüksek veya motivasyonu düşük. <strong>Öncelikli psikolojik görüşme planlayın.</strong></div>
-                  </div>
-                  <Link href={`/students/${s.id}`} className="btn" style={{ background: '#F59E0B', color: 'white', padding: '0.5rem 1rem', borderRadius: 'var(--radius-sm)', fontSize: '0.85rem', fontWeight: 700, textDecoration: 'none' }}>İncele</Link>
-                </div>
-              ))}
-              {performanceAlerts.map(s => (
-                <div key={'perf-'+s.id} style={{ 
-                  padding: '1.25rem', 
-                  background: '#FEE2E2', 
-                  borderRadius: 'var(--radius-md)', 
-                  color: '#991B1B', 
-                  display: 'flex', 
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  border: '1px solid #FCA5A5'
-                }}>
-                  <div>
-                    <div style={{ fontWeight: 800, marginBottom: '0.25rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}><span>📉</span> {s.firstName} {s.lastName}</div>
-                    <div style={{ fontSize: '0.9rem', opacity: 0.9 }}>Son denemede 5 netten fazla düşüş tespit edildi. <strong>Zayıf konu analizi gereklidir.</strong></div>
-                  </div>
-                  <Link href={`/students/${s.id}`} className="btn" style={{ background: '#EF4444', color: 'white', padding: '0.5rem 1rem', borderRadius: 'var(--radius-sm)', fontSize: '0.85rem', fontWeight: 700, textDecoration: 'none' }}>İncele</Link>
-                </div>
-              ))}
-              {psychoAlerts.length === 0 && performanceAlerts.length === 0 && (
-                <div style={{ padding: '2rem', textAlign: 'center', background: '#F0FDF4', borderRadius: 'var(--radius-md)', color: '#064E3B', border: '1px solid #A7F3D0' }}>
-                  <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>✨</div>
-                  <div style={{ fontWeight: 700 }}>Harika Haber!</div>
-                  <div style={{ fontSize: '0.9rem', marginTop: '0.25rem' }}>Şu an için akademik veya psikolojik kritik bir risk tespit edilmedi. Sistem stabil.</div>
-                </div>
-              )}
-            </div>
+        {/* ── ÖNCELİKLİ EYLEM GEREKTİREN ──────────────────── */}
+        <div style={{ background: 'white', border: '1px solid var(--border)', borderRadius: '12px', overflow: 'hidden' }}>
+          <div style={{ padding: '1rem 1.5rem', borderBottom: '1px solid var(--border)' }}>
+            <h2 style={{ fontWeight: 800, fontSize: '0.95rem', color: 'var(--text-primary)' }}>🎯 Öncelikli Koçluk Müdahalesi Gerektiren Öğrenciler</h2>
+            <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>Risk sinyali tespit edilen öğrenciler — bütünsel koçluk desteği gerekiyor.</p>
           </div>
-
-          {/* Veli İletişimi Board */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '1.5rem' }}>
-            <div className="card" style={{ padding: '2.5rem' }}>
-               <h2 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-primary)', marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                 <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: 'rgba(16, 185, 129, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#10B981' }}>💬</div>
-                 Veli İletişimi Gecikenler
-               </h2>
-               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                 {communicationAlerts.slice(0, 3).map(s => (
-                   <div key={'comm-'+s.id} style={{ 
-                     fontSize: '0.9rem', 
-                     display: 'flex', 
-                     justifyContent: 'space-between', 
-                     alignItems: 'center',
-                     padding: '1rem 1.25rem', 
-                     background: '#F8FAFC', 
-                     borderRadius: 'var(--radius-md)',
-                     border: '1px solid var(--border)' 
-                   }}>
-                     <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{s.firstName} {s.lastName}</span>
-                     <Link href="/parents" style={{ color: 'var(--secondary)', fontWeight: 700, textDecoration: 'none' }}>Mesaj At</Link>
-                   </div>
-                 ))}
-                 {communicationAlerts.length === 0 && <span style={{ fontSize: '0.85rem', color: 'var(--success)' }}>Tüm velilerle iletişim güncel.</span>}
-               </div>
-            </div>
+          <div style={{ padding: '1rem', display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+            {psychoAlerts.map(s => (
+              <div key={'p'+s.id} style={alertCard('#F59E0B', '#FFFBEB', '#FDE68A')}>
+                <div>
+                  <div style={{ fontWeight: 800, fontSize: '0.88rem', color: '#78350F', marginBottom: '0.2rem' }}>
+                    ⚡ {s.firstName} {s.lastName} — Motivasyon / Kaygı Desteği
+                  </div>
+                  <div style={{ fontSize: '0.78rem', color: '#92400E', lineHeight: 1.5 }}>
+                    Son psikolojik değerlendirmede kaygı artışı veya motivasyon düşüklüğü tespit edildi. Bir sonraki seansta bütünsel destek görüşmesi planlanmalıdır.
+                  </div>
+                </div>
+                <Link href={`/students/${s.id}`} style={{ ...linkBtn, background: '#F59E0B', color: 'white' }}>İncele</Link>
+              </div>
+            ))}
+            {performanceAlerts.map(s => (
+              <div key={'perf'+s.id} style={alertCard('#EF4444', '#FEF2F2', '#FECACA')}>
+                <div>
+                  <div style={{ fontWeight: 800, fontSize: '0.88rem', color: '#7F1D1D', marginBottom: '0.2rem' }}>
+                    📉 {s.firstName} {s.lastName} — Akademik Gerileme
+                  </div>
+                  <div style={{ fontSize: '0.78rem', color: '#991B1B', lineHeight: 1.5 }}>
+                    Son iki deneme arasında 5+ net düşüşü var. Konu analizi yapılmalı ve bireysel gelişim programı güncellenmeli.
+                  </div>
+                </div>
+                <Link href={`/students/${s.id}`} style={{ ...linkBtn, background: '#EF4444', color: 'white' }}>İncele</Link>
+              </div>
+            ))}
+            {inactiveStudents.slice(0, 2).map(s => (
+              <div key={'in'+s.id} style={alertCard('#6B7280', '#F9FAFB', '#E5E7EB')}>
+                <div>
+                  <div style={{ fontWeight: 800, fontSize: '0.88rem', color: '#1F2937', marginBottom: '0.2rem' }}>
+                    🔇 {s.firstName} {s.lastName} — Seans Sürekliliği Koptu
+                  </div>
+                  <div style={{ fontSize: '0.78rem', color: '#4B5563', lineHeight: 1.5 }}>
+                    10 günden fazladır seans yapılmadı. Süreklilik koçluğun temelidir — iletişime geçilmesi önerilir.
+                  </div>
+                </div>
+                <Link href={`/students/${s.id}`} style={{ ...linkBtn, background: '#6B7280', color: 'white' }}>İletişim</Link>
+              </div>
+            ))}
+            {totalAlerts === 0 && inactiveStudents.length === 0 && (
+              <div style={{ padding: '2rem', textAlign: 'center', background: '#F0FDF4', borderRadius: '8px', border: '1px solid #BBF7D0' }}>
+                <div style={{ fontSize: '1.5rem', marginBottom: '0.5rem' }}>✅</div>
+                <div style={{ fontWeight: 700, color: '#065F46', fontSize: '0.9rem' }}>Tüm öğrenciler yolunda</div>
+                <div style={{ fontSize: '0.78rem', color: '#047857', marginTop: '0.2rem' }}>Kritik risk sinyali tespit edilmedi.</div>
+              </div>
+            )}
           </div>
-
         </div>
       </div>
 
-      <div style={{ marginTop: '3rem' }}>
-        <LgsSimulatorWidget />
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem', marginBottom: '1.25rem' }}>
+
+        {/* ── VELİ İLETİŞİM TAKİBİ ─────────────────────────── */}
+        <div style={{ background: 'white', border: '1px solid var(--border)', borderRadius: '12px', overflow: 'hidden' }}>
+          <div style={{ padding: '1rem 1.5rem', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div>
+              <h2 style={{ fontWeight: 800, fontSize: '0.95rem', color: 'var(--text-primary)' }}>💬 Veli İletişim Köprüsü</h2>
+              <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '0.15rem' }}>14 günden uzun süredir iletişim kurulmayan aileler</p>
+            </div>
+            <Link href="/parents" style={{ ...linkBtn, background: '#EFF6FF', color: '#2563EB', border: '1px solid #DBEAFE' }}>Tümünü Gör</Link>
+          </div>
+          <div style={{ padding: '1rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+            {communicationAlerts.length === 0 ? (
+              <div style={{ padding: '1.5rem', textAlign: 'center', color: '#10B981', fontWeight: 600, fontSize: '0.85rem' }}>
+                ✅ Tüm velilerle iletişim güncel
+              </div>
+            ) : communicationAlerts.slice(0, 5).map(s => (
+              <div key={'c'+s.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.6rem 0.85rem', background: 'var(--bg-main)', borderRadius: '7px' }}>
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: '0.85rem' }}>{s.firstName} {s.lastName}</div>
+                  <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+                    {s.parentName ? `Veli: ${s.parentName}` : 'Veli bilgisi girilmemiş'}
+                  </div>
+                </div>
+                <Link href="/parents" style={{ ...linkBtn, background: '#25D366', color: 'white' }}>WhatsApp</Link>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* ── PROGRAM TAKİP TABLOSU ─────────────────────────── */}
+        <div style={{ background: 'white', border: '1px solid var(--border)', borderRadius: '12px', overflow: 'hidden' }}>
+          <div style={{ padding: '1rem 1.5rem', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div>
+              <h2 style={{ fontWeight: 800, fontSize: '0.95rem', color: 'var(--text-primary)' }}>📋 Bireysel Gelişim Programı Takibi</h2>
+              <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '0.15rem' }}>Bu haftaki program tamamlanma oranları</p>
+            </div>
+            <Link href="/assignments" style={{ ...linkBtn, background: 'var(--primary)', color: 'white' }}>Program Hazırla</Link>
+          </div>
+          <div style={{ padding: '1rem', display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+            {leaderboard.length === 0 ? (
+              <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+                Aktif haftalık program bulunamadı.
+              </div>
+            ) : leaderboard.slice(0, 6).map((s, i) => {
+              const pct = s.target > 0 ? Math.round((s.solved / s.target) * 100) : 0;
+              const color = pct >= 80 ? '#10B981' : pct >= 50 ? '#F59E0B' : '#EF4444';
+              return (
+                <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                  <span style={{ width: '20px', textAlign: 'right', fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', flexShrink: 0 }}>{i + 1}.</span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.2rem' }}>
+                      <span style={{ fontSize: '0.82rem', fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.name}</span>
+                      <span style={{ fontSize: '0.75rem', fontWeight: 800, color, flexShrink: 0 }}>%{pct}</span>
+                    </div>
+                    <div style={{ height: '5px', background: '#F1F5F9', borderRadius: '3px', overflow: 'hidden' }}>
+                      <div style={{ height: '100%', width: `${Math.min(pct, 100)}%`, background: color, borderRadius: '3px', transition: 'width 0.5s' }} />
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
       </div>
+
+      {/* ── GELİŞİM GRAFİKLERİ ──────────────────────────────── */}
       <DashboardChartsClient leaderboard={leaderboard} groupExamTrend={groupExamTrend} />
-    </main>
+
+    </div>
   );
 }

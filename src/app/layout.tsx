@@ -1,113 +1,44 @@
-import type { Metadata } from "next";
-import "./globals.css";
-import prisma from "@/lib/prisma";
-import HeaderSearch from "./HeaderSearch";
-import NavLink from "./NavLink";
+import type { Metadata } from 'next';
+import './globals.css';
+import prisma from '@/lib/prisma';
+import Sidebar from './components/Sidebar';
+import TopHeader from './components/TopHeader';
 
 export const metadata: Metadata = {
-  title: "Eğitim Koçluğu Yönetimi",
-  description: "Yapay Zeka Destekli Bireysel Koçluk Sistemi",
+  title: 'Koç Ajandası — Ahmet ŞANLI',
+  description: 'Yapay Zeka Destekli Koçluk Yönetim Sistemi',
 };
 
-export default async function RootLayout({
-  children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
-  const students = await prisma.student.findMany({
-    select: { id: true, firstName: true, lastName: true },
-    orderBy: { firstName: 'asc' }
-  });
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const [students, alerts] = await Promise.all([
+    prisma.student.findMany({
+      select: { id: true, firstName: true, lastName: true },
+      orderBy: { firstName: 'asc' },
+    }),
+    prisma.psychologicalRecord.count({
+      where: { OR: [{ anxietyLevel: { gt: 7 } }, { motivationLevel: { lt: 4 } }] },
+    }),
+  ]);
 
   return (
     <html lang="tr">
-      <body style={{ display: 'flex', minHeight: '100vh' }}>
-        {/* Sidebar */}
-        <aside style={{ 
-          width: '280px', 
-          borderRight: '1px solid var(--border)', 
-          background: 'var(--bg-card)', 
-          padding: '2rem 1.5rem', 
-          display: 'flex', 
-          flexDirection: 'column',
-          position: 'sticky',
-          top: 0,
-          height: '100vh',
-          overflowY: 'auto'
-        }}>
-          <div style={{ marginBottom: '2.5rem', display: 'flex', alignItems: 'center', gap: '1rem', padding: '0 0.5rem' }}>
-            <div style={{ 
-              width: '45px', 
-              height: '45px', 
-              borderRadius: '12px', 
-              background: 'linear-gradient(135deg, var(--secondary), var(--primary))', 
-              display: 'flex', 
-              alignItems: 'center', 
-              justifyContent: 'center', 
-              color: 'white', 
-              fontWeight: 900, 
-              fontSize: '1.2rem', 
-              boxShadow: 'var(--shadow-md)'
-            }}>
-              AŞ
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column' }}>
-              <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--secondary)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Süper Koç</span>
-              <h2 style={{ fontSize: '1.15rem', fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.02em', marginTop: '-0.1rem' }}>
-                Ahmet ŞANLI
-              </h2>
-            </div>
-          </div>
-          
-          <p style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '1rem', paddingLeft: '1rem' }}>Sistem Modülleri</p>
-          
-          <nav style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-            <NavLink href="/" icon="🎛️" text="Ana Operasyon Paneli" />
-            <NavLink href="/students" icon="🧑‍🎓" text="Dijital Öğrenci Envanteri" />
-            <NavLink href="/upload-exam" icon="📸" text="Optik Veri Aktarım (AI)" />
-          </nav>
-          
-          <div style={{ marginTop: 'auto', padding: '1rem', background: 'var(--bg-main)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)' }}>
-            <p style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)' }}>Premium Lisans Aktif</p>
-            <p style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Versiyon 2.0.0</p>
-          </div>
-        </aside>
+      <body style={{ display: 'flex', minHeight: '100vh', background: 'var(--bg-main)' }}>
 
-        {/* Main Content Area */}
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-          {/* Top Header Bar */}
-          <header style={{ 
-            background: 'rgba(255, 255, 255, 0.85)', 
-            backdropFilter: 'blur(12px)',
-            WebkitBackdropFilter: 'blur(12px)',
-            padding: '1rem 3rem', 
-            borderBottom: '1px solid var(--border)', 
-            display: 'flex', 
-            justifyContent: 'space-between', 
-            alignItems: 'center', 
-            position: 'sticky',
-            top: 0,
-            zIndex: 50
-          }} className="top-header">
-            <HeaderSearch students={students} />
-            <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'center' }}>
-              <button style={{ background: 'none', border: 'none', fontSize: '1.2rem', cursor: 'pointer', position: 'relative', color: 'var(--text-secondary)' }}>
-                🔔
-                <span style={{ position: 'absolute', top: '-2px', right: '-2px', width: '10px', height: '10px', background: 'var(--danger)', borderRadius: '50%', border: '2px solid var(--bg-card)' }}></span>
-              </button>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                <div style={{ width: '36px', height: '36px', borderRadius: '50%', background: 'var(--primary)', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold' }}>AŞ</div>
-              </div>
-            </div>
-          </header>
+        {/* ── Sidebar ── */}
+        <Sidebar studentCount={students.length} />
 
-          <div style={{ padding: '2.5rem 3rem', flex: 1 }}>
+        {/* ── İçerik Alanı ── */}
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'hidden' }}>
+
+          {/* ── Üst Header ── */}
+          <TopHeader students={students} notifCount={alerts} />
+
+          {/* ── Sayfa İçeriği ── */}
+          <main style={{ flex: 1, padding: '1.75rem 2rem', overflowY: 'auto' }}>
             {children}
-          </div>
+          </main>
         </div>
       </body>
     </html>
   );
 }
-
-

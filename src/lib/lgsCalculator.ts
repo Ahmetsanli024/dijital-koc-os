@@ -28,7 +28,10 @@ export const HIGH_SCHOOLS: HighSchool[] = [
   { name: "Konya Meram Fen Lisesi", city: "Konya", baseScore: 476, basePercentile: 1.10, quota: 120 },
   { name: "Eskişehir Fatih Fen Lisesi", city: "Eskişehir", baseScore: 472, basePercentile: 1.40, quota: 90 },
   { name: "Sakarya Cevat Ayhan Fen Lisesi", city: "Sakarya", baseScore: 460, basePercentile: 3.00, quota: 120 },
-  { name: "Kocaeli Fen Lisesi", city: "Kocaeli", baseScore: 474, basePercentile: 1.30, quota: 120 }
+  { name: "Kocaeli Fen Lisesi", city: "Kocaeli", baseScore: 474, basePercentile: 1.30, quota: 120 },
+  { name: "Gaziantep Fen Lisesi", city: "Gaziantep", baseScore: 476, basePercentile: 1.10, quota: 120 },
+  { name: "Şehitkamil Anadolu Lisesi", city: "Gaziantep", baseScore: 462, basePercentile: 2.50, quota: 200 },
+  { name: "Gaziantep Anadolu Lisesi", city: "Gaziantep", baseScore: 458, basePercentile: 3.00, quota: 250 }
 ];
 
 export const CITIES = Array.from(new Set(HIGH_SCHOOLS.map(h => h.city))).sort();

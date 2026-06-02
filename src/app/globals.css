@@ -1,40 +1,55 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Outfit:wght@300;400;500;600;700;800;900&display=swap');
 
 :root {
-  /* Navy & Gold Premium Enterprise Palette */
-  --primary: #1E3A8A;      /* Deep Navy (Blue 900) - Main Branding Accent */
-  --primary-hover: #1E40AF;/* Blue 800 - Hover Accent */
-  --secondary: #D97706;    /* Rich Gold (Amber 600) - Secondary Action */
-  --secondary-hover: #B45309;/* Amber 700 */
-  
-  --accent: #F59E0B;       /* Amber 500 - Alerts/Highlight */
-  --success: #10B981;      /* Emerald 500 */
-  --danger: #EF4444;       /* Red 500 */
-  
-  --bg-main: #F8FAFC;      /* Extremely subtle slate tint (Slate 50) */
-  --bg-card: #FFFFFF;      /* Pure White */
-  --bg-card-hover: #FFFFFF;/* Lift instead of color change */
-  
-  --text-primary: #0F172A; /* Slate 900 - Deepest contrast */
+  /* ── Ana Renk Paleti ── */
+  --primary: #2563EB;
+  --primary-hover: #1D4ED8;
+  --secondary: #D97706;
+  --secondary-hover: #B45309;
+  --accent: #F59E0B;
+  --success: #10B981;
+  --danger: #EF4444;
+  --warning: #F59E0B;
+
+  /* ── Arka Plan ── */
+  --bg-main: #F1F5F9;
+  --bg-card: #FFFFFF;
+  --bg-card-hover: #F8FAFC;
+
+  /* ── Metin ── */
+  --text-primary: #0F172A;
   --text-secondary: #475569;
-  --text-muted: #94A3B8;   
-  
-  --border: rgba(30, 58, 138, 0.15); /* Soft translucent navy border */
-  
-  /* Ultra-premium Apple-style diffuse shadows */
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.03);
-  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.04), 0 1px 3px rgba(0, 0, 0, 0.02);
-  --shadow-lg: 0 20px 40px rgba(0, 0, 0, 0.06), 0 1px 3px rgba(0, 0, 0, 0.02);
-  --shadow-glow: 0 8px 30px rgba(16, 185, 129, 0.2); 
-  
-  --radius-sm: 10px;
-  --radius-md: 16px;
-  --radius-lg: 24px;
+  --text-muted: #94A3B8;
+
+  /* ── Kenarlık ── */
+  --border: #E2E8F0;
+
+  /* ── Sidebar (Koyu Tema) ── */
+  --sidebar-bg: #1E293B;
+  --sidebar-header-bg: #0F172A;
+  --sidebar-text: #94A3B8;
+  --sidebar-text-active: #FFFFFF;
+  --sidebar-hover: rgba(255,255,255,0.06);
+  --sidebar-active-bg: rgba(37,99,235,0.25);
+  --sidebar-active-border: #2563EB;
+  --sidebar-group-text: #64748B;
+  --sidebar-width: 260px;
+
+  /* ── Gölgeler ── */
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.06);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.08);
+  --shadow-lg: 0 10px 30px rgba(0,0,0,0.1);
+
+  /* ── Köşe Yuvarlaklığı ── */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
   --radius-full: 9999px;
-  
+
+  /* ── Fontlar ── */
   --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
   --font-title: 'Outfit', 'Inter', system-ui, -apple-system, sans-serif;
-  --transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1); /* Premium spring easing */
+  --transition: all 0.2s ease;
 }
 
 /* Custom Scrollbars */
@@ -110,46 +125,40 @@ button, .btn {
 }
 
 .btn-primary {
-  background-color: var(--secondary);
+  background-color: var(--primary);
   color: #ffffff !important;
   border: none;
-  padding: 0.75rem 1.5rem;
-  border-radius: var(--radius-full);
-  font-weight: 600;
-  font-size: 0.95rem;
+  padding: 0.6rem 1.25rem;
+  border-radius: 8px;
+  font-weight: 700;
+  font-size: 0.88rem;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 0.5rem;
-  box-shadow: var(--shadow-sm);
+  gap: 0.45rem;
+  cursor: pointer;
   text-decoration: none;
+  transition: background 0.15s, opacity 0.15s;
 }
-
-.btn-primary:hover {
-  background-color: var(--secondary-hover);
-  box-shadow: var(--shadow-md);
-  transform: translateY(-1px);
-}
+.btn-primary:hover { background-color: var(--primary-hover); }
 
 .btn-secondary {
-  background-color: transparent;
+  background-color: white;
   color: var(--text-primary);
   border: 1px solid var(--border);
-  padding: 0.75rem 1.5rem;
-  border-radius: var(--radius-full);
+  padding: 0.6rem 1.25rem;
+  border-radius: 8px;
   font-weight: 600;
-  font-size: 0.95rem;
+  font-size: 0.88rem;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 0.5rem;
+  gap: 0.45rem;
   text-decoration: none;
+  cursor: pointer;
+  transition: background 0.15s;
 }
-
-.btn-secondary:hover {
-  background-color: var(--bg-card-hover);
-  border-color: var(--text-muted);
-}
+.btn-secondary:hover { background-color: var(--bg-main); }
 
 /* Inputs & Forms */
 input, select, textarea {
@@ -251,6 +260,12 @@ input:focus, select:focus, textarea:focus {
 }
 
 .nav-link:hover { background-color: var(--bg-card-hover); color: var(--text-primary) !important; }
+.table-row-hover:hover { background-color: #F8FAFC !important; }
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
 
 
 @media print {
