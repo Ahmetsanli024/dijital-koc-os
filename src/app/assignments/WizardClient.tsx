@@ -440,6 +440,25 @@ export default function WizardClient({ students }: { students: any[] }) {
   
   const [studentNote, setStudentNote] = useState<string>('Bu program senin genel durumun baz alınarak hazırlanmıştır. Görevlerini sorumluluk bilinciyle, ertelemeden tamamlaman başarının en büyük anahtarıdır. Sana inancım tam!');
 
+  // Tablodaki ödevlere göre dinamik not üret
+  const generateNoteFromSchedule = (data: typeof scheduleData) => {
+    const satırlar: string[] = [];
+    SUBJECTS.forEach(sub => {
+      const days = Object.values(data[sub] || {}) as { q: string; t: string }[];
+      const dolu = days.find(d => d.q);
+      if (!dolu) return;
+      const q = dolu.q;
+      const t = dolu.t ? ` (${dolu.t.split('/')[0].trim()})` : '';
+      satırlar.push(`• ${sub}${t} — günlük ${q} Soru`);
+    });
+
+    if (!satırlar.length) return studentNote;
+
+    const ad = manualStudentName ? manualStudentName.split(' ')[0] : '';
+    const karşılama = ad ? `Merhaba ${ad}!\n\n` : '';
+    return `${karşılama}Bu haftanın çalışma programın aşağıdaki gibidir:\n\n${satırlar.join('\n')}\n\nHer günü plana sadık kalarak tamamlaman çok önemli. Düzenli ve kararlı çalışmaya devam et — sana inancım tam!`;
+  };
+
   useEffect(() => {
     if (selectedStudent) {
       const initialState: Record<string, SubjectSmartState> = {};
@@ -961,6 +980,11 @@ export default function WizardClient({ students }: { students: any[] }) {
       return next;
     });
     setShowSmartTemplate(false);
+    // Notu tablodaki gerçek ödevlere göre güncelle
+    setScheduleData(prev => {
+      setStudentNote(generateNoteFromSchedule(prev));
+      return prev;
+    });
     alert('Şablon haftalık programa aktarıldı!');
   };
 
@@ -989,6 +1013,7 @@ export default function WizardClient({ students }: { students: any[] }) {
       });
       return next;
     });
+    setScheduleData(prev => { setStudentNote(generateNoteFromSchedule(prev)); return prev; });
     alert('Seçili olan konular haftalık programa aktarıldı!');
   };
 
@@ -1995,15 +2020,22 @@ export default function WizardClient({ students }: { students: any[] }) {
           <div className="print-details-section" style={{ padding: '0 1.5rem 1.5rem 1.5rem', background: 'white' }}>
             <div className="details-container" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
               <div style={{ border: '1px solid var(--text-primary)', padding: '1rem' }}>
-                <h4 style={{ fontSize: '0.85rem', fontWeight: 800, marginBottom: '0.5rem', color: 'var(--primary)' }}>
-                  SEVGİLİ {manualStudentName ? manualStudentName.split(' ')[0].toUpperCase() : 'ÖĞRENCİM'},
-                </h4>
-                <textarea 
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                  <h4 style={{ fontSize: '0.85rem', fontWeight: 800, color: 'var(--primary)' }}>
+                    SEVGİLİ {manualStudentName ? manualStudentName.split(' ')[0].toUpperCase() : 'ÖĞRENCİM'},
+                  </h4>
+                  <button className="no-print"
+                    onClick={() => setStudentNote(generateNoteFromSchedule(scheduleData))}
+                    style={{ padding: '0.2rem 0.6rem', borderRadius: '6px', border: '1px solid var(--primary)', background: '#EFF6FF', color: 'var(--primary)', fontWeight: 700, fontSize: '0.7rem', cursor: 'pointer' }}>
+                    🤖 Ödevden Güncelle
+                  </button>
+                </div>
+                <textarea
                   className="no-print"
-                  value={studentNote} 
-                  onChange={(e) => setStudentNote(e.target.value)} 
-                  style={{ width: '100%', border: 'none', resize: 'vertical', minHeight: '120px', fontSize: '0.85rem', color: 'var(--text-primary)', outline: 'none', fontFamily: 'var(--font-geist-sans)', lineHeight: '1.6' }} 
-                  rows={8} 
+                  value={studentNote}
+                  onChange={(e) => setStudentNote(e.target.value)}
+                  style={{ width: '100%', border: 'none', resize: 'vertical', minHeight: '120px', fontSize: '0.85rem', color: 'var(--text-primary)', outline: 'none', fontFamily: 'var(--font-geist-sans)', lineHeight: '1.6' }}
+                  rows={8}
                 />
                 <div 
                   className="print-only"

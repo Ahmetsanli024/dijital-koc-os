@@ -6,9 +6,13 @@ import HeaderSearch from '../HeaderSearch';
 export default function TopHeader({
   students,
   notifCount = 0,
+  coachName = 'Koç',
+  initials = 'K',
 }: {
   students: { id: string; firstName: string; lastName: string }[];
   notifCount?: number;
+  coachName?: string;
+  initials?: string;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
 
@@ -86,8 +90,8 @@ export default function TopHeader({
               background: 'linear-gradient(135deg,#2563EB,#7C3AED)',
               color: 'white', fontWeight: 800, fontSize: '0.7rem',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-            }}>AŞ</div>
-            <span style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-primary)' }}>Ahmet Şanlı</span>
+            }}>{initials}</div>
+            <span style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-primary)' }}>{coachName}</span>
             <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>▼</span>
           </button>
 
@@ -101,20 +105,28 @@ export default function TopHeader({
               {[
                 { icon: '⚙️', label: 'Ayarlar', href: '/settings' },
                 { icon: '📊', label: 'Kontrol Paneli', href: '/' },
-              ].map(item => (
+              ].map((item) => (
                 <Link key={item.href} href={item.href}
                   onClick={() => setMenuOpen(false)}
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: '0.6rem',
-                    padding: '0.65rem 1rem', textDecoration: 'none',
-                    fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-primary)',
-                  }}
+                  style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', padding: '0.65rem 1rem', textDecoration: 'none', fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-primary)' }}
                   onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = 'var(--bg-main)'}
                   onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'white'}
                 >
                   {item.icon} {item.label}
                 </Link>
               ))}
+              <div style={{ height: '1px', background: 'var(--border)', margin: '0.25rem 0' }} />
+              <button
+                onClick={async () => {
+                  await fetch('/api/auth/logout', { method: 'POST' });
+                  window.location.href = '/login';
+                }}
+                style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', padding: '0.65rem 1rem', width: '100%', border: 'none', background: 'none', cursor: 'pointer', fontSize: '0.82rem', fontWeight: 600, color: '#EF4444', textAlign: 'left' }}
+                onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = '#FEF2F2'}
+                onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'none'}
+              >
+                🚪 Çıkış Yap
+              </button>
             </div>
           )}
         </div>

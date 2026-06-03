@@ -6,21 +6,50 @@ import DashboardQuickActions from './components/DashboardQuickActions';
 import AiCommandCenter from './components/AiCommandCenter';
 
 export default async function Home() {
-  const students = await prisma.student.findMany({
-    orderBy: { firstName: 'asc' },
-    include: {
-      exams:        { orderBy: { date: 'desc' } },
-      parentComms:  { orderBy: { date: 'desc' } },
-      schedules:    { where: { status: 'ACTIVE' }, include: { tasks: true } },
-      psychoRecords:{ orderBy: { date: 'desc' } },
-      appointments: { orderBy: { date: 'asc' } },
-      sessions:     { orderBy: { date: 'desc' }, take: 1 },
-    },
-  });
+  const today = new Date();
 
-  const today    = new Date();
-  const lgsDate  = new Date('2026-06-13T00:00:00');
+  const [students, settings, monthSessions, recentSessions] = await Promise.all([
+    prisma.student.findMany({
+      orderBy: { firstName: 'asc' },
+      include: {
+        exams:        { orderBy: { date: 'desc' } },
+        parentComms:  { orderBy: { date: 'desc' } },
+        schedules:    { where: { status: 'ACTIVE' }, include: { tasks: true } },
+        psychoRecords:{ orderBy: { date: 'desc' } },
+        appointments: { orderBy: { date: 'asc' } },
+        sessions:     { orderBy: { date: 'desc' }, take: 1 },
+      },
+    }),
+    prisma.coachSettings.findUnique({ where: { id: 'default' } }),
+    // Bu ay yapılan seans sayısı
+    prisma.sessionNote.count({
+      where: { date: { gte: new Date(today.getFullYear(), today.getMonth(), 1) } },
+    }),
+    // Son 5 seans aktivitesi
+    prisma.sessionNote.findMany({
+      orderBy: { date: 'desc' },
+      take: 5,
+      include: { student: { select: { firstName: true, lastName: true } } },
+    }),
+  ]);
+
+  const lgsDateStr = settings?.lgsExamDate || '2026-06-13';
+  const lgsDate  = new Date(lgsDateStr + 'T00:00:00');
   const lgsDays  = Math.ceil((lgsDate.getTime() - today.getTime()) / 86_400_000);
+
+  // ── Koçluk etkinlik metrikleri ───────────────────────────────
+  // Ortalama net artışı (son 2 sınav olan öğrenciler)
+  const netGrowths = students
+    .filter(s => s.exams.length >= 2)
+    .map(s => s.exams[0].totalNet - s.exams[1].totalNet);
+  const avgNetGrowth = netGrowths.length > 0
+    ? (netGrowths.reduce((a, b) => a + b, 0) / netGrowths.length).toFixed(1)
+    : null;
+
+  // En çok gelişen öğrenci bu ay
+  const mostImproved = students
+    .filter(s => s.exams.length >= 2)
+    .sort((a, b) => (b.exams[0].totalNet - b.exams[1].totalNet) - (a.exams[0].totalNet - a.exams[1].totalNet))[0] || null;
 
   // ── Bugünkü seanslar ─────────────────────────────────────────
   const todayAppts = students
@@ -158,18 +187,20 @@ export default async function Home() {
       </div>
 
       {/* ── ÜST ÖZET KARTLAR ──────────────────────────────────── */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1rem', marginBottom: '1.5rem' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: '0.85rem', marginBottom: '1.5rem' }}>
         {[
-          { label: 'Aktif Öğrenci', value: students.length, sub: 'portföyde', accent: '#2563EB', icon: '👤' },
-          { label: 'Bugünkü Seans', value: todayAppts.length, sub: 'planlandı', accent: '#7C3AED', icon: '📅' },
-          { label: 'Program Tamamlama', value: `%${completionRate}`, sub: 'bu hafta ortalama', accent: '#059669', icon: '📊' },
-          { label: 'Öncelikli Eylem', value: totalAlerts, sub: 'öğrenci ilgi bekliyor', accent: '#DC2626', icon: '⚠️' },
+          { label: 'Aktif Öğrenci',       value: students.length,               sub: 'portföyde',            accent: '#2563EB', icon: '👤' },
+          { label: 'Bugünkü Seans',        value: todayAppts.length,             sub: 'planlandı',            accent: '#7C3AED', icon: '📅' },
+          { label: 'Bu Ay Seans',          value: monthSessions,                 sub: 'gerçekleşti',          accent: '#059669', icon: '✅' },
+          { label: 'Ort. Net Artışı',      value: avgNetGrowth ? `+${avgNetGrowth}` : '—', sub: 'son 2 sınav farkı', accent: '#10B981', icon: '📈' },
+          { label: 'Program Tamamlama',    value: `%${completionRate}`,          sub: 'bu hafta ort.',        accent: '#F59E0B', icon: '📊' },
+          { label: 'Öncelikli Eylem',      value: totalAlerts,                   sub: 'öğrenci ilgi bekliyor', accent: '#DC2626', icon: '⚠️' },
         ].map(s => (
           <div key={s.label} style={statCard(s.accent)}>
-            <div style={{ fontSize: '1.3rem' }}>{s.icon}</div>
-            <div style={{ fontSize: '1.8rem', fontWeight: 900, color: 'var(--text-primary)', lineHeight: 1 }}>{s.value}</div>
-            <div style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-secondary)' }}>{s.label}</div>
-            <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{s.sub}</div>
+            <div style={{ fontSize: '1.1rem' }}>{s.icon}</div>
+            <div style={{ fontSize: '1.5rem', fontWeight: 900, color: 'var(--text-primary)', lineHeight: 1 }}>{s.value}</div>
+            <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-secondary)', marginTop: '0.15rem' }}>{s.label}</div>
+            <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>{s.sub}</div>
           </div>
         ))}
       </div>
@@ -338,6 +369,47 @@ export default async function Home() {
       </div>
 
       {/* ── GELİŞİM GRAFİKLERİ ──────────────────────────────── */}
+      {/* En cok gelisen + Son Aktivite */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem', marginBottom: '1.25rem' }}>
+        {mostImproved && (() => {
+          const growth = +(mostImproved.exams[0].totalNet - mostImproved.exams[1].totalNet).toFixed(1);
+          return (
+            <div style={{ background: 'linear-gradient(135deg,#F0FDF4,#ECFDF5)', border: '1px solid #BBF7D0', borderRadius: '12px', padding: '1.25rem' }}>
+              <div style={{ fontSize: '0.72rem', fontWeight: 800, color: '#059669', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.75rem' }}>🏆 Bu Dönem En Çok Gelişen</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                <div style={{ width: '44px', height: '44px', borderRadius: '50%', background: '#059669', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 900, fontSize: '1rem', flexShrink: 0 }}>
+                  {mostImproved.firstName[0]}{mostImproved.lastName[0]}
+                </div>
+                <div>
+                  <div style={{ fontWeight: 800, fontSize: '1rem' }}>{mostImproved.firstName} {mostImproved.lastName}</div>
+                  <div style={{ fontSize: '0.82rem', color: '#065f46' }}>{mostImproved.exams[1].totalNet.toFixed(1)} → <strong>{mostImproved.exams[0].totalNet.toFixed(1)}</strong> net</div>
+                </div>
+                <div style={{ marginLeft: 'auto', fontWeight: 900, fontSize: '1.5rem', color: '#059669' }}>+{growth}</div>
+              </div>
+              <Link href={`/students/${mostImproved.id}`} style={{ display: 'inline-block', marginTop: '0.85rem', fontSize: '0.78rem', fontWeight: 700, color: '#059669', textDecoration: 'none' }}>Profili Görüntüle →</Link>
+            </div>
+          );
+        })()}
+        <div style={{ background: 'white', border: '1px solid var(--border)', borderRadius: '12px', overflow: 'hidden' }}>
+          <div style={{ padding: '0.85rem 1.25rem', borderBottom: '1px solid var(--border)', fontWeight: 800, fontSize: '0.88rem' }}>🕐 Son Seans Aktiviteleri</div>
+          <div>
+            {(recentSessions as any[]).map((s: any) => (
+              <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.6rem 1.25rem', borderBottom: '1px solid var(--border)' }}>
+                <div style={{ width: '30px', height: '30px', borderRadius: '50%', background: '#EFF6FF', color: '#2563EB', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: '0.72rem', flexShrink: 0 }}>
+                  {s.student.firstName[0]}{s.student.lastName[0]}
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontWeight: 700, fontSize: '0.82rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.student.firstName} {s.student.lastName}</div>
+                  <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.title}</div>
+                </div>
+                <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', flexShrink: 0 }}>{new Date(s.date).toLocaleDateString('tr-TR', { day: 'numeric', month: 'short' })}</div>
+              </div>
+            ))}
+            {recentSessions.length === 0 && <div style={{ padding: '1rem 1.25rem', color: 'var(--text-muted)', fontSize: '0.82rem' }}>Henüz seans kaydı yok</div>}
+          </div>
+        </div>
+      </div>
+
       <DashboardChartsClient leaderboard={leaderboard} groupExamTrend={groupExamTrend} />
 
     </div>

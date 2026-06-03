@@ -157,7 +157,7 @@ function NavGroupItem({ group }: { group: NavGroup }) {
   );
 }
 
-export default function Sidebar({ studentCount }: { studentCount: number }) {
+export default function Sidebar({ studentCount, coachName = 'Koç', coachTitle = 'Eğitim Koçu', initials = 'K' }: { studentCount: number; coachName?: string; coachTitle?: string; initials?: string }) {
   const [collapsed, setCollapsed] = useState(false);
 
   return (
@@ -186,11 +186,11 @@ export default function Sidebar({ studentCount }: { studentCount: number }) {
               background: 'linear-gradient(135deg, #2563EB, #7C3AED)',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               color: 'white', fontWeight: 900, fontSize: '1rem', flexShrink: 0,
-            }}>AŞ</div>
+            }}>{initials}</div>
             {!collapsed && (
               <div style={{ overflow: 'hidden' }}>
                 <div style={{ fontSize: '0.65rem', fontWeight: 700, color: '#60A5FA', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Koç Ajandası</div>
-                <div style={{ fontSize: '0.9rem', fontWeight: 800, color: 'white', lineHeight: 1.2, whiteSpace: 'nowrap' }}>Ahmet ŞANLI</div>
+                <div style={{ fontSize: '0.9rem', fontWeight: 800, color: 'white', lineHeight: 1.2, whiteSpace: 'nowrap' }}>{coachName}</div>
               </div>
             )}
           </div>
