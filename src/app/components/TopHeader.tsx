@@ -115,18 +115,6 @@ export default function TopHeader({
                   {item.icon} {item.label}
                 </Link>
               ))}
-              <div style={{ height: '1px', background: 'var(--border)', margin: '0.25rem 0' }} />
-              <button
-                onClick={async () => {
-                  await fetch('/api/auth/logout', { method: 'POST' });
-                  window.location.href = '/login';
-                }}
-                style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', padding: '0.65rem 1rem', width: '100%', border: 'none', background: 'none', cursor: 'pointer', fontSize: '0.82rem', fontWeight: 600, color: '#EF4444', textAlign: 'left' }}
-                onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = '#FEF2F2'}
-                onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'none'}
-              >
-                🚪 Çıkış Yap
-              </button>
             </div>
           )}
         </div>
