@@ -3,6 +3,26 @@
 import prisma from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
 
+export async function addBadge(studentId: string, title: string, icon: string) {
+  try {
+    const badge = await prisma.badge.create({ data: { studentId, title, icon } });
+    revalidatePath(`/students/${studentId}`);
+    return { success: true, badge };
+  } catch (e: any) {
+    return { success: false, error: e.message };
+  }
+}
+
+export async function deleteBadge(badgeId: string, studentId: string) {
+  try {
+    await prisma.badge.delete({ where: { id: badgeId } });
+    revalidatePath(`/students/${studentId}`);
+    return { success: true };
+  } catch (e: any) {
+    return { success: false, error: e.message };
+  }
+}
+
 export async function addPsychoRecord(data: { studentId: string, anxietyLevel: number, motivationLevel: number, focusLevel: number, coachNote: string }) {
   try {
     const record = await prisma.psychologicalRecord.create({

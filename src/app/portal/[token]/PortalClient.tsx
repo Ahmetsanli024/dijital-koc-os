@@ -1,162 +1,358 @@
 'use client';
-import React, { useState } from 'react';
+import React, { useState, useTransition, useMemo } from 'react';
+import { toggleTaskCompletion } from '../../actions/schedule';
+
+const DAYS_TR: Record<string, string> = {
+  'PAZARTESİ': 'Pzt', 'SALI': 'Sal', 'ÇARŞAMBA': 'Çar',
+  'PERŞEMBE': 'Per', 'CUMA': 'Cum', 'CUMARTESİ': 'Cmt', 'PAZAR': 'Paz',
+};
+const SUBJECT_COLORS: Record<string, string> = {
+  'TÜRKÇE': '#7C3AED', 'MATEMATİK': '#2563EB', 'FEN BİLİMLERİ': '#059669',
+  'T.C. İNKILAP TARİHİ': '#D97706', 'İNGİLİZCE': '#DB2777', 'DİN KÜLTÜRÜ': '#7C3AED',
+};
 
 export default function PortalClient({ student }: { student: any }) {
-  const [activeTab, setActiveTab] = useState('dashboard');
-  
-  const currentSchedule = student.schedules?.[0];
-  const completedTasks = currentSchedule?.tasks?.filter((t:any) => t.isCompleted).length || 0;
-  const totalTasks = currentSchedule?.tasks?.length || 0;
-  const progress = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
-  
-  const lastExam = student.exams?.[0];
-  const exams = student.exams || [];
+  const [activeTab, setActiveTab]   = useState<'home'|'tasks'|'exams'|'badges'>('home');
+  const [tasks, setTasks]           = useState(student.schedules?.[0]?.tasks || []);
+  const [isPending, startTransition] = useTransition();
+  const [toast, setToast]           = useState('');
+
+  const showToast = (m: string) => { setToast(m); setTimeout(() => setToast(''), 2500); };
+
+  const schedule = student.schedules?.[0];
+  const done     = tasks.filter((t: any) => t.isCompleted).length;
+  const total    = tasks.length;
+  const pct      = total > 0 ? Math.round((done / total) * 100) : 0;
+
+  const lastExam   = student.exams?.[0];
+  const nextAppt   = student.appointments?.[0];
+  const psycho     = student.psychoRecords?.[0];
+  const lgsDate    = new Date('2026-06-13');
+  const lgsDays    = Math.ceil((lgsDate.getTime() - Date.now()) / 86_400_000);
+
+  // Net trendi
+  const netTrend = student.exams?.length >= 2
+    ? student.exams[0].totalNet > student.exams[1].totalNet ? '↑' : '↓'
+    : null;
+
+  // Günlük görevler — bugünün günü
+  const todayKey = ['PAZAR','PAZARTESİ','SALI','ÇARŞAMBA','PERŞEMBE','CUMA','CUMARTESİ'][new Date().getDay()];
+  const todayTasks  = tasks.filter((t: any) => t.day === todayKey || t.day === todayKey.substring(0,3));
+  const todayDone   = todayTasks.filter((t: any) => t.isCompleted).length;
+
+  // Streak (kaç gün üst üste en az 1 görev yapıldı — basit tahmini)
+  const streak = student.badges?.filter((b: any) => b.icon === '🔥').length || 0;
+
+  const handleToggle = (taskId: string, current: boolean) => {
+    startTransition(async () => {
+      await toggleTaskCompletion(taskId, !current);
+      setTasks((prev: any[]) => prev.map(t => t.id === taskId ? { ...t, isCompleted: !current } : t));
+      if (!current) showToast('Harika! Görevi tamamladın 🎉');
+    });
+  };
+
+  // Gruplama: derse göre
+  const tasksBySubject = useMemo(() => {
+    const g: Record<string, any[]> = {};
+    tasks.forEach((t: any) => {
+      if (!g[t.subject]) g[t.subject] = [];
+      g[t.subject].push(t);
+    });
+    return g;
+  }, [tasks]);
+
+  const motivationQuotes = [
+    `${student.firstName}, küçük adımlar büyük hedeflere ulaştırır. Devam et!`,
+    `Her çözdüğün soru seni hedefe bir adım daha yaklaştırıyor.`,
+    `Bugün yorulabilirsin, ama bırakma. ${student.firstName}, sen bunu hak ediyorsun.`,
+    `Başarı tesadüf değildir — sen her gün inşa ediyorsun.`,
+  ];
+  const quote = motivationQuotes[new Date().getDay() % motivationQuotes.length];
+
+  // ── Stiller ──────────────────────────────────────────────────
+  const card = (extra?: React.CSSProperties): React.CSSProperties => ({
+    background: 'white', border: '1px solid #E2E8F0', borderRadius: '14px', padding: '1.25rem', ...extra,
+  });
 
   return (
-    <div style={{ minHeight: '100vh', background: '#0B0F19', color: 'white', fontFamily: 'var(--font-sans)', backgroundImage: 'radial-gradient(circle at 50% 0%, #1E293B 0%, #0B0F19 60%)' }}>
-      
-      {/* Top Navbar */}
-      <nav style={{ padding: '1.5rem 2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(255,255,255,0.05)', background: 'rgba(11, 15, 25, 0.8)', backdropFilter: 'blur(10px)', position: 'sticky', top: 0, zIndex: 100 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-          <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: 'linear-gradient(135deg, #3B82F6, #10B981)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', fontSize: '1.2rem', boxShadow: '0 0 15px rgba(59, 130, 246, 0.5)' }}>
-            {student.firstName[0]}
-          </div>
+    <div style={{ minHeight: '100vh', background: '#F1F5F9', fontFamily: "'Inter',system-ui,sans-serif", paddingBottom: '80px' }}>
+
+      {/* Toast */}
+      {toast && (
+        <div style={{ position: 'fixed', top: '1rem', left: '50%', transform: 'translateX(-50%)', background: '#10B981', color: 'white', padding: '0.7rem 1.5rem', borderRadius: '30px', fontWeight: 700, fontSize: '0.9rem', zIndex: 9999, boxShadow: '0 4px 20px rgba(0,0,0,0.15)' }}>
+          {toast}
+        </div>
+      )}
+
+      {/* Header */}
+      <div style={{ background: 'linear-gradient(135deg, #1E3A8A 0%, #2563EB 100%)', padding: '1.5rem 1.25rem 2rem', color: 'white' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <div>
-            <div style={{ fontWeight: 800, fontSize: '1.1rem' }}>{student.firstName} {student.lastName}</div>
-            <div style={{ fontSize: '0.75rem', color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '1px' }}>Ahmet Şanlı Koçluk • LGS 2026</div>
+            <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.7)', fontWeight: 600, marginBottom: '0.25rem' }}>
+              {new Date().toLocaleDateString('tr-TR', { weekday: 'long', day: 'numeric', month: 'long' })}
+            </div>
+            <h1 style={{ fontSize: '1.5rem', fontWeight: 900, marginBottom: '0.2rem' }}>
+              Merhaba, {student.firstName}! 👋
+            </h1>
+            <div style={{ fontSize: '0.82rem', color: 'rgba(255,255,255,0.75)' }}>
+              {student.grade} · {student.target || 'Hedef belirle'}
+            </div>
+          </div>
+          <div style={{ textAlign: 'right' }}>
+            <div style={{ fontSize: '0.65rem', color: 'rgba(255,255,255,0.6)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>LGS'ye</div>
+            <div style={{ fontSize: '2rem', fontWeight: 900, lineHeight: 1 }}>{lgsDays}</div>
+            <div style={{ fontSize: '0.65rem', color: 'rgba(255,255,255,0.6)' }}>gün kaldı</div>
           </div>
         </div>
-        <div style={{ display: 'flex', gap: '1rem' }}>
-          <button onClick={() => setActiveTab('dashboard')} style={{ background: activeTab === 'dashboard' ? 'rgba(59, 130, 246, 0.2)' : 'transparent', color: activeTab === 'dashboard' ? '#60A5FA' : '#9CA3AF', border: 'none', padding: '0.5rem 1rem', borderRadius: '8px', cursor: 'pointer', fontWeight: 600, transition: 'all 0.2s' }}>Ana Panel</button>
-          <button onClick={() => setActiveTab('tasks')} style={{ background: activeTab === 'tasks' ? 'rgba(59, 130, 246, 0.2)' : 'transparent', color: activeTab === 'tasks' ? '#60A5FA' : '#9CA3AF', border: 'none', padding: '0.5rem 1rem', borderRadius: '8px', cursor: 'pointer', fontWeight: 600, transition: 'all 0.2s' }}>Görevlerim</button>
-        </div>
-      </nav>
 
-      <main style={{ maxWidth: '1000px', margin: '0 auto', padding: '2rem' }}>
-        
-        {activeTab === 'dashboard' && (
-          <div style={{ animation: 'fadeIn 0.5s' }}>
-            {/* Welcome Banner */}
-            <div style={{ background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.1), rgba(16, 185, 129, 0.1))', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '24px', padding: '3rem', marginBottom: '2rem', position: 'relative', overflow: 'hidden' }}>
-              <div style={{ position: 'relative', zIndex: 1 }}>
-                <h1 style={{ fontSize: '2.5rem', fontWeight: 900, marginBottom: '0.5rem' }}>Merhaba, {student.firstName}! 🚀</h1>
-                <p style={{ color: '#9CA3AF', fontSize: '1.1rem', maxWidth: '600px', lineHeight: 1.6 }}>
-                  Süper Koçluk sistemine hoş geldin. Hedefin olan <strong>{student.target || 'Zirve'}</strong> için bu hafta odaklanman gereken çok şey var. Başarı tesadüf değildir!
-                </p>
-              </div>
-              <div style={{ position: 'absolute', right: '-50px', top: '-50px', width: '300px', height: '300px', background: 'radial-gradient(circle, rgba(59,130,246,0.2) 0%, rgba(0,0,0,0) 70%)' }}></div>
+        {/* Progress Bar */}
+        {schedule && (
+          <div style={{ marginTop: '1.25rem', background: 'rgba(255,255,255,0.12)', borderRadius: '10px', padding: '0.85rem 1rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem', fontWeight: 700, marginBottom: '0.45rem' }}>
+              <span>Bu Haftanın Programı</span>
+              <span style={{ color: pct >= 70 ? '#6EE7B7' : '#FCD34D' }}>{done}/{total} Görev · %{pct}</span>
             </div>
+            <div style={{ height: '7px', background: 'rgba(255,255,255,0.2)', borderRadius: '4px', overflow: 'hidden' }}>
+              <div style={{ height: '100%', width: `${pct}%`, background: pct >= 70 ? '#10B981' : '#F59E0B', borderRadius: '4px', transition: 'width 0.8s' }} />
+            </div>
+          </div>
+        )}
+      </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem' }}>
-              
-              {/* Progress & Badges */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
-                <div style={{ background: 'rgba(30, 41, 59, 0.5)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '16px', padding: '2rem' }}>
-                  <h3 style={{ fontSize: '1.2rem', marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}><span>🎯</span> Haftalık Görev İlerlemesi</h3>
-                  {currentSchedule ? (
-                    <div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
-                        <span style={{ color: '#9CA3AF' }}>{completedTasks} / {totalTasks} Görev Tamamlandı</span>
-                        <span style={{ fontWeight: 'bold', color: '#10B981' }}>%{progress}</span>
+      <div style={{ padding: '1rem 1.25rem' }}>
+
+        {/* ── ANA PANEL ──────────────────────────────────────── */}
+        {activeTab === 'home' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+
+            {/* Bugünün Görevleri */}
+            {todayTasks.length > 0 && (
+              <div style={card()}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.85rem' }}>
+                  <div style={{ fontWeight: 800, fontSize: '0.95rem' }}>📅 Bugünün Görevleri</div>
+                  <span style={{ fontSize: '0.75rem', color: '#059669', fontWeight: 700 }}>{todayDone}/{todayTasks.length}</span>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                  {todayTasks.map((t: any) => (
+                    <div key={t.id} onClick={() => handleToggle(t.id, t.isCompleted)}
+                      style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.75rem', background: t.isCompleted ? '#F0FDF4' : '#F8FAFC', borderRadius: '9px', cursor: 'pointer', border: `1px solid ${t.isCompleted ? '#BBF7D0' : '#E2E8F0'}`, opacity: isPending ? 0.7 : 1, transition: 'all 0.2s' }}>
+                      <div style={{ width: '24px', height: '24px', borderRadius: '50%', border: `2px solid ${t.isCompleted ? '#10B981' : '#CBD5E1'}`, background: t.isCompleted ? '#10B981' : 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'all 0.2s' }}>
+                        {t.isCompleted && <span style={{ color: 'white', fontSize: '0.75rem', fontWeight: 900 }}>✓</span>}
                       </div>
-                      <div style={{ width: '100%', height: '12px', background: 'rgba(255,255,255,0.1)', borderRadius: '6px', overflow: 'hidden' }}>
-                        <div style={{ width: `${progress}%`, height: '100%', background: 'linear-gradient(90deg, #3B82F6, #10B981)', borderRadius: '6px', transition: 'width 1s ease-in-out' }}></div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontWeight: 700, fontSize: '0.88rem', color: t.isCompleted ? '#6B7280' : '#111827', textDecoration: t.isCompleted ? 'line-through' : 'none' }}>
+                          {t.subject}
+                        </div>
+                        <div style={{ fontSize: '0.75rem', color: '#94A3B8' }}>{t.topic} · {t.questionCount} soru</div>
+                      </div>
+                      <div style={{ fontSize: '0.65rem', fontWeight: 800, padding: '0.15rem 0.4rem', borderRadius: '4px', background: (SUBJECT_COLORS[t.subject] || '#6B7280') + '18', color: SUBJECT_COLORS[t.subject] || '#6B7280' }}>
+                        {DAYS_TR[t.day] || t.day}
                       </div>
                     </div>
-                  ) : (
-                    <p style={{ color: '#9CA3AF' }}>Bu hafta için atanmış bir görev planın bulunmuyor.</p>
-                  )}
+                  ))}
                 </div>
+              </div>
+            )}
 
-                <div style={{ background: 'rgba(30, 41, 59, 0.5)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '16px', padding: '2rem' }}>
-                  <h3 style={{ fontSize: '1.2rem', marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}><span>🏆</span> Kazanılan Rozetler</h3>
-                  {(!student.badges || student.badges.length === 0) ? (
-                    <p style={{ color: '#9CA3AF' }}>Görevlerini tamamladıkça burada rozetler birikecek!</p>
-                  ) : (
-                    <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
-                      {student.badges.map((b:any) => (
-                        <div key={b.id} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', background: 'rgba(255,255,255,0.05)', padding: '1rem', borderRadius: '12px', width: '100px', border: '1px solid rgba(255,255,255,0.1)', transition: 'transform 0.2s', cursor: 'default' }} onMouseOver={e => e.currentTarget.style.transform = 'scale(1.05)'} onMouseOut={e => e.currentTarget.style.transform = 'scale(1)'}>
-                          <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>{b.icon}</div>
-                          <div style={{ fontSize: '0.75rem', fontWeight: 'bold', textAlign: 'center', color: '#E2E8F0' }}>{b.title}</div>
+            {/* Sonraki Seans */}
+            {nextAppt && (
+              <div style={{ ...card(), background: 'linear-gradient(135deg, #EFF6FF, #F0FDF4)', borderColor: '#BFDBFE' }}>
+                <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#2563EB', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.35rem' }}>📅 Sonraki Koçluk Seansın</div>
+                <div style={{ fontWeight: 800, fontSize: '1rem' }}>
+                  {new Date(nextAppt.date).toLocaleDateString('tr-TR', { weekday: 'long', day: 'numeric', month: 'long' })}
+                </div>
+                <div style={{ fontSize: '0.82rem', color: '#64748B', marginTop: '0.2rem' }}>
+                  {new Date(nextAppt.date).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })} · {nextAppt.title}
+                </div>
+              </div>
+            )}
+
+            {/* Son Sınav */}
+            {lastExam && (
+              <div style={card()}>
+                <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.85rem' }}>📊 Son Deneme Sonucu</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem' }}>
+                  <div style={{ width: '72px', height: '72px', borderRadius: '50%', border: '4px solid #2563EB', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    <div style={{ fontSize: '1.4rem', fontWeight: 900, color: '#2563EB', lineHeight: 1 }}>{lastExam.totalNet}</div>
+                    <div style={{ fontSize: '0.58rem', color: '#94A3B8', fontWeight: 700 }}>NET</div>
+                  </div>
+                  <div>
+                    <div style={{ fontWeight: 800, fontSize: '0.95rem', marginBottom: '0.2rem' }}>
+                      {lastExam.name}
+                      {netTrend && <span style={{ marginLeft: '0.5rem', color: netTrend === '↑' ? '#10B981' : '#EF4444', fontWeight: 900 }}>{netTrend}</span>}
+                    </div>
+                    <div style={{ fontSize: '0.75rem', color: '#94A3B8' }}>{new Date(lastExam.date).toLocaleDateString('tr-TR')}</div>
+                    <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.4rem' }}>
+                      <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#10B981', background: '#F0FDF4', padding: '0.15rem 0.4rem', borderRadius: '4px' }}>✓ {lastExam.totalCorrect}</span>
+                      <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#EF4444', background: '#FEF2F2', padding: '0.15rem 0.4rem', borderRadius: '4px' }}>✗ {lastExam.totalIncorrect}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Koçun Mesajı */}
+            <div style={{ ...card(), borderLeft: '4px solid #2563EB' }}>
+              <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#2563EB', marginBottom: '0.5rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>💬 Koçunun Mesajı</div>
+              <p style={{ fontSize: '0.88rem', color: '#374151', lineHeight: 1.65, fontStyle: 'italic' }}>
+                {student.notes || quote}
+              </p>
+              <div style={{ marginTop: '0.6rem', fontSize: '0.72rem', color: '#94A3B8', fontWeight: 600 }}>— Ahmet ŞANLI, Eğitim Koçu</div>
+            </div>
+
+            {/* Rozetler */}
+            {student.badges?.length > 0 && (
+              <div style={card()}>
+                <div style={{ fontWeight: 800, fontSize: '0.95rem', marginBottom: '0.85rem' }}>🏆 Kazandığın Rozetler ({student.badges.length})</div>
+                <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+                  {student.badges.map((b: any) => (
+                    <div key={b.id} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '10px', padding: '0.75rem', minWidth: '70px' }}>
+                      <div style={{ fontSize: '1.75rem', marginBottom: '0.3rem' }}>{b.icon}</div>
+                      <div style={{ fontSize: '0.65rem', fontWeight: 700, textAlign: 'center', color: '#374151' }}>{b.title}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── GÖREVLER ────────────────────────────────────────── */}
+        {activeTab === 'tasks' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.25rem' }}>
+              <h2 style={{ fontSize: '1.1rem', fontWeight: 800 }}>Bu Haftanın Programı</h2>
+              <span style={{ fontSize: '0.8rem', color: pct >= 70 ? '#10B981' : '#F59E0B', fontWeight: 800 }}>%{pct} tamamlandı</span>
+            </div>
+
+            {!schedule ? (
+              <div style={{ ...card(), textAlign: 'center', padding: '3rem 1.5rem' }}>
+                <div style={{ fontSize: '2.5rem', marginBottom: '0.75rem' }}>📭</div>
+                <div style={{ fontWeight: 700, fontSize: '1rem', marginBottom: '0.4rem' }}>Program Henüz Hazırlanmadı</div>
+                <div style={{ fontSize: '0.85rem', color: '#94A3B8' }}>Koçun yakında bu haftaki programını oluşturacak.</div>
+              </div>
+            ) : (
+              Object.entries(tasksBySubject).map(([subject, subTasks]) => {
+                const color = SUBJECT_COLORS[subject] || '#64748B';
+                const subDone = (subTasks as any[]).filter((t: any) => t.isCompleted).length;
+                return (
+                  <div key={subject} style={card()}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.85rem' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                        <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: color, flexShrink: 0 }} />
+                        <span style={{ fontWeight: 800, fontSize: '0.92rem', color }}>{subject}</span>
+                      </div>
+                      <span style={{ fontSize: '0.75rem', fontWeight: 700, color: subDone === (subTasks as any[]).length ? '#10B981' : '#94A3B8' }}>
+                        {subDone}/{(subTasks as any[]).length}
+                      </span>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.45rem' }}>
+                      {(subTasks as any[]).map((t: any) => (
+                        <div key={t.id} onClick={() => handleToggle(t.id, t.isCompleted)}
+                          style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', padding: '0.65rem 0.75rem', background: t.isCompleted ? '#F0FDF4' : '#F8FAFC', borderRadius: '8px', cursor: 'pointer', border: `1px solid ${t.isCompleted ? '#BBF7D0' : '#E2E8F0'}`, transition: 'all 0.15s' }}>
+                          <div style={{ width: '20px', height: '20px', borderRadius: '50%', border: `2px solid ${t.isCompleted ? '#10B981' : '#CBD5E1'}`, background: t.isCompleted ? '#10B981' : 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                            {t.isCompleted && <span style={{ color: 'white', fontSize: '0.65rem' }}>✓</span>}
+                          </div>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <span style={{ fontWeight: 600, fontSize: '0.85rem', color: t.isCompleted ? '#9CA3AF' : '#1F2937', textDecoration: t.isCompleted ? 'line-through' : 'none' }}>
+                              {t.topic || 'Genel Çalışma'}
+                            </span>
+                            <span style={{ fontSize: '0.72rem', color: '#94A3B8', marginLeft: '0.4rem' }}>{t.questionCount} soru</span>
+                          </div>
+                          <span style={{ fontSize: '0.65rem', fontWeight: 700, color: '#94A3B8' }}>{DAYS_TR[t.day] || t.day}</span>
                         </div>
                       ))}
                     </div>
-                  )}
-                </div>
-              </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        )}
 
-              {/* LGS Stats */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
-                <div style={{ background: 'rgba(30, 41, 59, 0.5)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '16px', padding: '2rem' }}>
-                  <h3 style={{ fontSize: '1.2rem', marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}><span>📊</span> LGS Deneme Analizi</h3>
-                  {lastExam ? (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '2rem' }}>
-                      <div style={{ width: '120px', height: '120px', borderRadius: '50%', border: '4px solid #3B82F6', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', boxShadow: '0 0 20px rgba(59, 130, 246, 0.3)' }}>
-                        <div style={{ fontSize: '2rem', fontWeight: 900, color: '#60A5FA' }}>{lastExam.totalNet}</div>
-                        <div style={{ fontSize: '0.7rem', color: '#9CA3AF', textTransform: 'uppercase' }}>Net</div>
-                      </div>
-                      <div>
-                        <div style={{ fontSize: '1.1rem', fontWeight: 700, marginBottom: '0.2rem' }}>Son Sınav: {lastExam.name}</div>
-                        <div style={{ color: '#9CA3AF', fontSize: '0.9rem', marginBottom: '1rem' }}>{new Date(lastExam.date).toLocaleDateString('tr-TR')}</div>
-                        
-                        <div style={{ display: 'flex', gap: '1rem' }}>
-                          <div style={{ background: 'rgba(16, 185, 129, 0.1)', padding: '0.5rem', borderRadius: '8px', color: '#10B981', fontSize: '0.8rem', fontWeight: 'bold' }}>{lastExam.totalCorrect} Doğru</div>
-                          <div style={{ background: 'rgba(239, 68, 68, 0.1)', padding: '0.5rem', borderRadius: '8px', color: '#EF4444', fontSize: '0.8rem', fontWeight: 'bold' }}>{lastExam.totalIncorrect} Yanlış</div>
-                        </div>
-                      </div>
+        {/* ── SINAV GEÇMİŞİ ───────────────────────────────────── */}
+        {activeTab === 'exams' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+            <h2 style={{ fontSize: '1.1rem', fontWeight: 800, marginBottom: '0.25rem' }}>Deneme Sınavı Geçmişi</h2>
+            {student.exams?.length === 0 ? (
+              <div style={{ ...card(), textAlign: 'center', padding: '3rem' }}>
+                <div style={{ fontSize: '2.5rem', marginBottom: '0.75rem' }}>📝</div>
+                <div style={{ fontWeight: 700 }}>Henüz sınav kaydı yok</div>
+              </div>
+            ) : student.exams?.map((e: any, i: number, arr: any[]) => {
+              const prev = arr[i + 1];
+              const diff = prev ? +(e.totalNet - prev.totalNet).toFixed(1) : null;
+              return (
+                <div key={e.id} style={card({ display: 'flex', alignItems: 'center', gap: '1rem' })}>
+                  <div style={{ width: '56px', height: '56px', borderRadius: '50%', border: `3px solid ${diff === null ? '#2563EB' : diff > 0 ? '#10B981' : '#EF4444'}`, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    <div style={{ fontSize: '1.1rem', fontWeight: 900, color: '#2563EB', lineHeight: 1 }}>{e.totalNet}</div>
+                    <div style={{ fontSize: '0.55rem', color: '#94A3B8', fontWeight: 700 }}>NET</div>
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontWeight: 700, fontSize: '0.9rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{e.name}</div>
+                    <div style={{ fontSize: '0.72rem', color: '#94A3B8' }}>{new Date(e.date).toLocaleDateString('tr-TR')}</div>
+                  </div>
+                  {diff !== null && (
+                    <div style={{ fontWeight: 900, fontSize: '0.9rem', color: diff > 0 ? '#10B981' : '#EF4444', flexShrink: 0 }}>
+                      {diff > 0 ? '+' : ''}{diff}
                     </div>
-                  ) : (
-                    <p style={{ color: '#9CA3AF' }}>Henüz sisteme deneme sınavı yüklenmemiş.</p>
                   )}
                 </div>
+              );
+            })}
+          </div>
+        )}
 
-                <div style={{ background: 'rgba(30, 41, 59, 0.5)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '16px', padding: '2rem' }}>
-                  <h3 style={{ fontSize: '1.2rem', marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}><span>🤖</span> Koçun Notu</h3>
-                  <p style={{ color: '#E2E8F0', fontStyle: 'italic', lineHeight: 1.6, borderLeft: '3px solid #3B82F6', paddingLeft: '1rem' }}>
-                    {student.notes || "Bu hafta hedeflerine ulaşmak için sadece planda kal. Unutma, en önemli adım bir sonraki adımdır."}
-                  </p>
-                </div>
+        {/* ── ROZETLER ────────────────────────────────────────── */}
+        {activeTab === 'badges' && (
+          <div>
+            <h2 style={{ fontSize: '1.1rem', fontWeight: 800, marginBottom: '1rem' }}>🏆 Başarı Rozetlerin</h2>
+            {student.badges?.length === 0 ? (
+              <div style={{ ...card(), textAlign: 'center', padding: '3rem' }}>
+                <div style={{ fontSize: '3rem', marginBottom: '0.75rem' }}>🎯</div>
+                <div style={{ fontWeight: 700, fontSize: '1rem', marginBottom: '0.4rem' }}>Henüz rozet kazanılmadı</div>
+                <div style={{ fontSize: '0.85rem', color: '#94A3B8' }}>Görevlerini tamamladıkça rozetler kazanacaksın!</div>
               </div>
+            ) : (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.75rem' }}>
+                {student.badges.map((b: any) => (
+                  <div key={b.id} style={{ ...card({ textAlign: 'center', padding: '1.25rem 0.75rem' }) }}>
+                    <div style={{ fontSize: '2.5rem', marginBottom: '0.5rem' }}>{b.icon}</div>
+                    <div style={{ fontWeight: 800, fontSize: '0.82rem', marginBottom: '0.25rem' }}>{b.title}</div>
+                    <div style={{ fontSize: '0.65rem', color: '#94A3B8' }}>{new Date(b.dateAwarded).toLocaleDateString('tr-TR')}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
 
+      {/* ── ALT NAVİGASYON (Mobil) ──────────────────────────── */}
+      <nav style={{ position: 'fixed', bottom: 0, left: 0, right: 0, background: 'white', borderTop: '1px solid #E2E8F0', display: 'flex', zIndex: 100, boxShadow: '0 -4px 20px rgba(0,0,0,0.06)' }}>
+        {([
+          { tab: 'home',   icon: '🏠', label: 'Ana Panel' },
+          { tab: 'tasks',  icon: '📋', label: 'Görevler',  badge: total - done > 0 ? total - done : null },
+          { tab: 'exams',  icon: '📊', label: 'Sınavlar' },
+          { tab: 'badges', icon: '🏆', label: 'Rozetler',  badge: student.badges?.length || null },
+        ] as const).map(btn => (
+          <button key={btn.tab} onClick={() => setActiveTab(btn.tab)}
+            style={{ flex: 1, padding: '0.75rem 0.5rem 0.6rem', border: 'none', background: 'white', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.2rem', position: 'relative' }}>
+            <div style={{ position: 'relative' }}>
+              <span style={{ fontSize: '1.2rem' }}>{btn.icon}</span>
+              {(btn as any).badge ? (
+                <span style={{ position: 'absolute', top: '-4px', right: '-6px', background: '#EF4444', color: 'white', borderRadius: '10px', fontSize: '0.55rem', fontWeight: 900, padding: '0.05rem 0.3rem', lineHeight: 1.4 }}>{(btn as any).badge}</span>
+              ) : null}
             </div>
-          </div>
-        )}
-
-        {activeTab === 'tasks' && (
-          <div style={{ animation: 'fadeIn 0.5s' }}>
-             <h2 style={{ fontSize: '1.8rem', fontWeight: 800, marginBottom: '2rem' }}>Bu Haftanın Görevleri</h2>
-             {currentSchedule ? (
-               <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                 {currentSchedule.tasks.map((task:any) => (
-                   <div key={task.id} style={{ background: 'rgba(30, 41, 59, 0.5)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '12px', padding: '1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', opacity: task.isCompleted ? 0.5 : 1 }}>
-                     <div>
-                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
-                         <span style={{ background: 'rgba(59, 130, 246, 0.2)', color: '#60A5FA', padding: '0.2rem 0.5rem', borderRadius: '4px', fontSize: '0.75rem', fontWeight: 'bold' }}>{task.day}</span>
-                         <span style={{ fontWeight: 'bold', fontSize: '1.1rem' }}>{task.subject}</span>
-                       </div>
-                       <div style={{ color: '#9CA3AF' }}>{task.topic} — <strong style={{ color: '#E2E8F0' }}>{task.questionCount || 0} Soru</strong></div>
-                     </div>
-                     <div>
-                       {task.isCompleted ? (
-                         <div style={{ color: '#10B981', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '0.5rem' }}><span>✅</span> Tamamlandı</div>
-                       ) : (
-                         <div style={{ color: '#F59E0B', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '0.5rem' }}><span>⏳</span> Bekliyor</div>
-                       )}
-                     </div>
-                   </div>
-                 ))}
-               </div>
-             ) : (
-               <div style={{ textAlign: 'center', padding: '4rem', background: 'rgba(30, 41, 59, 0.5)', borderRadius: '16px' }}>
-                 <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>🏖️</div>
-                 <h3 style={{ fontSize: '1.2rem', marginBottom: '0.5rem' }}>Görev Bulunmuyor</h3>
-                 <p style={{ color: '#9CA3AF' }}>Ahmet Hoca henüz sana bu hafta için bir çalışma programı tanımlamadı.</p>
-               </div>
-             )}
-          </div>
-        )}
-
-      </main>
+            <span style={{ fontSize: '0.62rem', fontWeight: activeTab === btn.tab ? 800 : 600, color: activeTab === btn.tab ? '#2563EB' : '#94A3B8' }}>
+              {btn.label}
+            </span>
+            {activeTab === btn.tab && (
+              <div style={{ position: 'absolute', bottom: 0, left: '50%', transform: 'translateX(-50%)', width: '24px', height: '2px', background: '#2563EB', borderRadius: '2px 2px 0 0' }} />
+            )}
+          </button>
+        ))}
+      </nav>
     </div>
   );
 }

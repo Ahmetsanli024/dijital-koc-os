@@ -9,6 +9,7 @@ import { BOOK_CATALOG } from '@/lib/bookCatalog';
 import { calculateLgsPercentile, getImprovementOpportunities } from '@/lib/lgsCalculator';
 import { updateStudent } from '../../actions/student';
 import { deleteExam } from '../../actions/exam';
+import { generatePortalToken, addBadge, deleteBadge } from '../../actions/psycho';
 
 export default function ClientPage({ initialStudent }: { initialStudent: any }) {
   const router = useRouter();
@@ -131,7 +132,12 @@ export default function ClientPage({ initialStudent }: { initialStudent: any }) 
     return matched ? matched.id : 'none';
   };
 
-  const [isUploading, setIsUploading] = useState(false);
+  const [isUploading, setIsUploading]     = useState(false);
+  const [showPortalModal, setPortalModal] = useState(false);
+  const [portalToken, setPortalToken]     = useState(initialStudent.portalToken || '');
+  const [isGenToken, setGenToken]         = useState(false);
+  const [badges, setBadges]               = useState<any[]>(initialStudent.badges || []);
+  const [showBadgePanel, setBadgePanel]   = useState(false);
   
   const [activeAiExam, setActiveAiExam] = useState<any>(null);
   const [isAiLoading, setIsAiLoading] = useState(false);
@@ -608,131 +614,413 @@ export default function ClientPage({ initialStudent }: { initialStudent: any }) 
   };
   const chronicWeaknesses = getChronicWeaknesses();
 
+  // ── Yardımcı hesaplamalar ─────────────────────────────────────────
+  const lastExam      = exams[0];
+  const lastPsycho    = initialStudent.psychoRecords?.[0];
+  const activeSched   = initialStudent.schedules?.find((s: any) => s.status === 'ACTIVE');
+  const totalTasks    = activeSched?.tasks?.length || 0;
+  const doneTasks     = activeSched?.tasks?.filter((t: any) => t.isCompleted).length || 0;
+  const programPct    = totalTasks > 0 ? Math.round((doneTasks / totalTasks) * 100) : null;
+  const programColor  = programPct === null ? '#94A3B8' : programPct >= 70 ? '#10B981' : programPct >= 40 ? '#F59E0B' : '#EF4444';
+
+  // Psikolojik renk
+  const psychoRisk = lastPsycho && (lastPsycho.anxietyLevel > 7 || lastPsycho.motivationLevel < 4);
+
+  // Net trend ok
+  const netTrend = exams.length >= 2
+    ? exams[0].totalNet > exams[1].totalNet ? '↑' : exams[0].totalNet < exams[1].totalNet ? '↓' : '→'
+    : null;
+  const netTrendColor = netTrend === '↑' ? '#10B981' : netTrend === '↓' ? '#EF4444' : '#94A3B8';
+
+  // Kart stili
+  const metricCard = (accent: string): React.CSSProperties => ({
+    background: 'white', border: '1px solid var(--border)', borderRadius: '10px',
+    padding: '1rem 1.25rem', borderTop: `3px solid ${accent}`,
+  });
+
   return (
-    <main style={{ maxWidth: '1400px', margin: '0 auto', width: '100%' }}>
-      
-      {/* Alarms Bar */}
-      {(hasNetDropAlarm || chronicWeaknesses.length > 0) && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginBottom: '1.5rem' }}>
+    <div style={{ maxWidth: '1300px', width: '100%' }}>
+
+      {/* ── BREADCRUMB + AKSİYONLAR ──────────────────────────── */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', flexWrap: 'wrap', gap: '0.75rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+          <Link href="/students" style={{ color: 'var(--text-muted)', textDecoration: 'none', fontWeight: 600 }}>Koçluk Portföyü</Link>
+          <span>/</span>
+          <span style={{ color: 'var(--text-primary)', fontWeight: 700 }}>{initialStudent.firstName} {initialStudent.lastName}</span>
+        </div>
+        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+          {initialStudent.sinavzaLink && (
+            <button onClick={() => window.open(initialStudent.sinavzaLink, '_blank')} style={{ padding: '0.4rem 0.8rem', borderRadius: '7px', border: '1px solid var(--border)', background: 'white', fontWeight: 600, fontSize: '0.78rem', cursor: 'pointer' }}>
+              Sınavza ↗
+            </button>
+          )}
+          <button onClick={() => setShowKanban(true)} style={{ padding: '0.4rem 0.8rem', borderRadius: '7px', border: '1px solid var(--border)', background: 'white', fontWeight: 600, fontSize: '0.78rem', cursor: 'pointer' }}>
+            🖐️ Kanban
+          </button>
+          <Link href={`/assignments?studentId=${initialStudent.id}`} style={{ padding: '0.4rem 0.9rem', borderRadius: '7px', border: 'none', background: 'var(--primary)', color: 'white', fontWeight: 700, fontSize: '0.78rem', textDecoration: 'none' }}>
+            📅 Program Hazırla
+          </Link>
+          <button onClick={() => {
+            let report = `Sayın Velimiz,\n\n${initialStudent.firstName} adlı öğrencimizin bu haftaki durum değerlendirmesi:\n\n`;
+            if (exams.length > 0) report += `📌 Son Deneme: ${exams[0].name} (Net: ${exams[0].totalNet})\n`;
+            if (chronicWeaknesses.length > 0) report += `⚠️ Zayıf Konular: ${chronicWeaknesses.slice(0,3).join(', ')}\n`;
+            report += `\nDesteğiniz için teşekkür ederim.\n\nAhmet ŞANLI — Eğitim Koçu`;
+            window.open(`https://wa.me/${(initialStudent.parentPhone || '').replace(/\s+/g, '')}?text=${encodeURIComponent(report)}`, '_blank');
+          }} style={{ padding: '0.4rem 0.9rem', borderRadius: '7px', border: 'none', background: '#25D366', color: 'white', fontWeight: 700, fontSize: '0.78rem', cursor: 'pointer' }}>
+            💬 WhatsApp
+          </button>
+          <button onClick={() => setPortalModal(true)} style={{ padding: '0.4rem 0.8rem', borderRadius: '7px', border: '1px solid #7C3AED', background: '#F5F3FF', fontWeight: 700, fontSize: '0.78rem', cursor: 'pointer', color: '#7C3AED' }}>
+            🔗 Portal Linki
+          </button>
+          <button onClick={() => setBadgePanel(v => !v)} style={{ padding: '0.4rem 0.8rem', borderRadius: '7px', border: '1px solid #D97706', background: '#FFFBEB', fontWeight: 700, fontSize: '0.78rem', cursor: 'pointer', color: '#D97706' }}>
+            🏆 Rozet Ver
+          </button>
+          <button onClick={() => setShowEditModal(true)} style={{ padding: '0.4rem 0.8rem', borderRadius: '7px', border: '1px solid var(--border)', background: 'white', fontWeight: 600, fontSize: '0.78rem', cursor: 'pointer' }}>
+            ✏️ Düzenle
+          </button>
+        </div>
+      </div>
+
+      {/* ── ÖĞRENCİ PROFIL KARTI ─────────────────────────────── */}
+      <div style={{ background: 'linear-gradient(135deg, #1E3A8A 0%, #1e40af 100%)', borderRadius: '12px', padding: '1.5rem 2rem', marginBottom: '1.25rem', color: 'white', position: 'relative', overflow: 'hidden' }}>
+        <div style={{ position: 'absolute', right: '-30px', top: '-30px', width: '180px', height: '180px', borderRadius: '50%', background: 'rgba(255,255,255,0.05)' }} />
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', position: 'relative' }}>
+          {/* Sol: Kimlik */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+            <div style={{ width: '56px', height: '56px', borderRadius: '14px', background: 'rgba(255,255,255,0.15)', border: '2px solid rgba(255,255,255,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 900, fontSize: '1.3rem', flexShrink: 0 }}>
+              {initialStudent.firstName[0]}{initialStudent.lastName[0]}
+            </div>
+            <div>
+              <h1 style={{ fontSize: '1.5rem', fontWeight: 900, color: 'white', letterSpacing: '-0.02em', marginBottom: '0.15rem' }}>
+                {initialStudent.firstName} {initialStudent.lastName}
+              </h1>
+              <div style={{ fontSize: '0.82rem', color: 'rgba(255,255,255,0.75)', display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+                <span>📚 {initialStudent.grade}</span>
+                {initialStudent.school && <span>🏫 {initialStudent.school}</span>}
+                {initialStudent.field && <span>🎓 {initialStudent.field}</span>}
+                {initialStudent.parentName && <span>👨‍👩‍👧 {initialStudent.parentName} · {initialStudent.parentPhone}</span>}
+              </div>
+            </div>
+          </div>
+          {/* Sağ: Hedef */}
+          <div style={{ textAlign: 'right' }}>
+            <div style={{ fontSize: '0.68rem', color: 'rgba(255,255,255,0.6)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '0.2rem' }}>Akademik Hedef</div>
+            <div style={{ fontSize: '1rem', fontWeight: 800, color: 'white' }}>{initialStudent.targetSchool || initialStudent.target || '—'}</div>
+            {initialStudent.targetNets && <div style={{ fontSize: '0.78rem', color: 'rgba(255,255,255,0.7)' }}>{initialStudent.targetNets}</div>}
+            <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.5)', marginTop: '0.2rem' }}>{countdown.examName} · {countdown.days} gün kaldı</div>
+          </div>
+        </div>
+      </div>
+
+      {/* ── UYARI BANDI ──────────────────────────────────────── */}
+      {(hasNetDropAlarm || chronicWeaknesses.length > 0 || psychoRisk) && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', marginBottom: '1rem' }}>
           {hasNetDropAlarm && (
-            <div style={{ background: '#fef2f2', border: '1px solid #fee2e2', color: '#b91c1c', padding: '0.8rem 1.2rem', borderRadius: '12px', fontSize: '0.9rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <span>⚠️ Performans Alarmı:</span> Son 2 denemede netlerinde üst üste düşüş gözlemlendi! Çalışma verimini gözden geçirin.
+            <div style={{ background: '#FEF2F2', border: '1px solid #FECACA', borderLeft: '4px solid #EF4444', color: '#7F1D1D', padding: '0.65rem 1rem', borderRadius: '8px', fontSize: '0.82rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              ⚠️ <strong>Performans Alarmı:</strong> Son 2 denemede üst üste net düşüşü — bireysel gelişim programı acilen güncellenmeli.
             </div>
           )}
           {chronicWeaknesses.length > 0 && (
-            <div style={{ background: '#fffbeb', border: '1px solid #fef3c7', color: '#b45309', padding: '0.8rem 1.2rem', borderRadius: '12px', fontSize: '0.9rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <span>🚨 Kronik Eksik Alarmı:</span> Son 3 denemedir hatalı çıkan kritik konular: {chronicWeaknesses.slice(0, 3).join(', ')}
+            <div style={{ background: '#FFFBEB', border: '1px solid #FDE68A', borderLeft: '4px solid #F59E0B', color: '#78350F', padding: '0.65rem 1rem', borderRadius: '8px', fontSize: '0.82rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              🚨 <strong>Kronik Zayıflık:</strong> {chronicWeaknesses.slice(0, 3).join(' · ')}
+            </div>
+          )}
+          {psychoRisk && (
+            <div style={{ background: '#EFF6FF', border: '1px solid #BFDBFE', borderLeft: '4px solid #3B82F6', color: '#1E3A8A', padding: '0.65rem 1rem', borderRadius: '8px', fontSize: '0.82rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              🧠 <strong>Psikolojik Destek:</strong> Kaygı veya motivasyon sinyali — bir sonraki seansta bütünsel destek görüşmesi planlanmalı.
             </div>
           )}
         </div>
       )}
 
-      <header style={{ marginBottom: '2.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'stretch', gap: '1.5rem' }}>
-        
-        {/* Left Side: Strategic Info Card */}
-        <div className="card" style={{ flex: 2, padding: '1.5rem', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-          <div>
-            <a href="/students" style={{ color: 'var(--text-secondary)', textDecoration: 'none', fontSize: '0.85rem', marginBottom: '0.5rem', display: 'inline-block' }}>← Envantere Dön</a>
-            <h1 style={{ fontSize: '1.8rem', fontWeight: 900, color: 'var(--text-primary)', letterSpacing: '-0.03em', display: 'flex', alignItems: 'center', gap: '0.75rem', marginTop: '0.2rem' }}>
-              <span style={{ background: 'var(--primary)', color: 'white', width: '42px', height: '42px', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem' }}>
-                {initialStudent.firstName[0]}{initialStudent.lastName[0]}
-              </span>
-              {initialStudent.firstName} {initialStudent.lastName}
-            </h1>
-            <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginTop: '0.4rem', fontWeight: 600 }}>
-              {initialStudent.grade} • {initialStudent.school || 'Okul Belirtilmedi'} {initialStudent.field ? `• Alan: ${initialStudent.field}` : ''}
-            </p>
+      {/* ── HIZLI METRİK KARTI SATIRI ─────────────────────── */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '0.85rem', marginBottom: '1.25rem' }}>
+        {/* Son Net */}
+        <div style={metricCard('#2563EB')}>
+          <div style={{ fontSize: '0.68rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.3rem' }}>Son Deneme Neti</div>
+          <div style={{ fontSize: '1.8rem', fontWeight: 900, color: '#2563EB', lineHeight: 1 }}>
+            {lastExam ? lastExam.totalNet : '—'}
+            {netTrend && <span style={{ fontSize: '1rem', marginLeft: '0.3rem', color: netTrendColor }}>{netTrend}</span>}
           </div>
+          <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>{lastExam?.name || 'Sınav girilmedi'}</div>
+        </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginTop: '1rem', borderTop: '1px solid var(--border)', paddingTop: '1rem' }}>
-            <div>
-              <span style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 800 }}>🎯 HEDEF LİSE / ÜNİVERSİTE</span>
-              <span style={{ fontSize: '0.9rem', fontWeight: 800, color: 'var(--text-primary)' }}>{initialStudent.targetSchool || initialStudent.target || 'Belirtilmedi'}</span>
-              {initialStudent.targetDepartment && <span style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{initialStudent.targetDepartment} ({initialStudent.targetCity || ''})</span>}
-            </div>
-            <div>
-              <span style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 800 }}>🎯 HEDEF NET HEDEFİ</span>
-              <span style={{ fontSize: '0.9rem', fontWeight: 800, color: 'var(--primary)' }}>{initialStudent.targetNets || 'Net Hedefi Girilmedi'}</span>
-            </div>
-          </div>
+        {/* LGS Tahmini */}
+        <div style={metricCard('#7C3AED')}>
+          <div style={{ fontSize: '0.68rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.3rem' }}>LGS Tahmin Puanı</div>
+          <div style={{ fontSize: '1.8rem', fontWeight: 900, color: '#7C3AED', lineHeight: 1 }}>{lgsPrediction?.score || '—'}</div>
+          <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>%{lgsPrediction?.percentile || '—'} dilim</div>
+        </div>
 
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '1rem', background: 'var(--bg-main)', padding: '0.5rem 1rem', borderRadius: '8px' }}>
-            <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Veli: {initialStudent.parentName || '-'} ({initialStudent.parentPhone || '-'})</span>
-            <div style={{ display: 'flex', gap: '0.5rem' }}>
-              {initialStudent.sinavzaLink && (
-                <button onClick={() => window.open(initialStudent.sinavzaLink, '_blank')} className="btn-secondary" style={{ padding: '0.3rem 0.6rem', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
-                  Sınavza ↗
-                </button>
-              )}
-              <button onClick={() => setShowEditModal(true)} className="btn-secondary" style={{ padding: '0.3rem 0.6rem', fontSize: '0.75rem' }}>
-                Düzenle ✏️
-              </button>
-              <button onClick={() => {
-                let report = `Sayın Veli, \n${initialStudent.firstName} adlı öğrencimizin bu haftaki durum değerlendirmesi:\n\n`;
-                if (exams.length > 0) {
-                  report += `📌 Son Deneme: ${exams[0].name} (Toplam Net: ${exams[0].totalNet})\n`;
-                  if (chronicWeaknesses.length > 0) report += `⚠️ Tespit Edilen Zayıf Konular: ${chronicWeaknesses.slice(0,3).join(', ')}\n`;
-                }
-                if (initialStudent.psychoRecords && initialStudent.psychoRecords.length > 0) {
-                  const p = initialStudent.psychoRecords[0];
-                  report += `\n🧠 Psikolojik & Kariyer:\nMotivasyon: ${p.motivationLevel}/10 | Kaygı: ${p.anxietyLevel}/10\nNot: ${p.coachNote || 'Sürecimiz planlandığı gibi olumlu ilerlemektedir.'}\n`;
-                }
-                report += `\nÖnümüzdeki hafta hedeflerini tamamlaması için desteklerinizi rica ederim. İyi çalışmalar.`;
-                window.open(`https://wa.me/${(initialStudent.parentPhone || '').replace(/\s+/g, '')}?text=${encodeURIComponent(report)}`, '_blank');
-              }} className="btn-primary" style={{ padding: '0.3rem 0.8rem', fontSize: '0.75rem', background: '#25D366', color: 'white' }}>
-                WhatsApp Raporu 💬
-              </button>
-            </div>
+        {/* Seans İlerlemesi */}
+        <div style={metricCard('#059669')}>
+          <div style={{ fontSize: '0.68rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.3rem' }}>Koçluk Seansları</div>
+          <div style={{ fontSize: '1.8rem', fontWeight: 900, color: '#059669', lineHeight: 1 }}>{completedSessions}<span style={{ fontSize: '1rem', color: 'var(--text-muted)' }}>/{totalSessions}</span></div>
+          <div style={{ height: '4px', background: '#D1FAE5', borderRadius: '2px', marginTop: '0.5rem', overflow: 'hidden' }}>
+            <div style={{ height: '100%', width: `${sessionProgressPct}%`, background: '#059669', borderRadius: '2px' }} />
           </div>
         </div>
 
-        {/* Right Side: Quick Assignment Planner */}
-        <div className="card" style={{ flex: 1.8, padding: '1.5rem', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', background: 'linear-gradient(135deg, rgba(30,58,138,0.02), rgba(30,58,138,0.05))', border: '1px solid rgba(30,58,138,0.1)' }}>
-          <div>
-            <div style={{ fontSize: '0.9rem', fontWeight: 800, color: 'var(--primary)', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-              <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}><span>⚡</span> Hızlı Görev & Ödev Atama</span>
-            </div>
-            <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', lineHeight: '1.5' }}>
-              Ayrı sayfalarda gezinmeden doğrudan öğrenci profilinin içerisinden, tamamen aşamasız şekilde yeni bir haftalık program başlatın.
-            </p>
+        {/* Program Tamamlama */}
+        <div style={metricCard(programColor)}>
+          <div style={{ fontSize: '0.68rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.3rem' }}>Program Tamamlama</div>
+          <div style={{ fontSize: '1.8rem', fontWeight: 900, color: programColor, lineHeight: 1 }}>
+            {programPct !== null ? `%${programPct}` : '—'}
           </div>
-          <div style={{ display: 'flex', gap: '1rem', marginTop: '1.5rem' }}>
-            <button onClick={() => setShowKanban(true)} className="btn-secondary" style={{ flex: 1, padding: '0.75rem', fontSize: '0.85rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
-              <span>🖐️</span> Görsel Kanban (Sürükle Bırak)
+          <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>
+            {totalTasks > 0 ? `${doneTasks}/${totalTasks} görev` : 'Aktif program yok'}
+          </div>
+        </div>
+
+        {/* Psikolojik Durum */}
+        <div style={metricCard(psychoRisk ? '#EF4444' : '#F59E0B')}>
+          <div style={{ fontSize: '0.68rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.3rem' }}>Psikolojik Durum</div>
+          {lastPsycho ? (
+            <>
+              <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginBottom: '0.2rem' }}>
+                <span style={{ fontSize: '0.78rem', fontWeight: 700 }}>🚀 {lastPsycho.motivationLevel}/10</span>
+                <span style={{ fontSize: '0.78rem', fontWeight: 700 }}>😰 {lastPsycho.anxietyLevel}/10</span>
+              </div>
+              <div style={{ fontSize: '0.72rem', color: psychoRisk ? '#EF4444' : 'var(--text-muted)', fontWeight: psychoRisk ? 700 : 400 }}>
+                {psychoRisk ? '⚠️ Destek gerekiyor' : '✅ Stabil'}
+              </div>
+            </>
+          ) : <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>Kayıt yok</div>}
+        </div>
+      </div>
+
+      {/* ── PORTAL LİNK MODAL ────────────────────────────────── */}
+      {showPortalModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }}>
+          <div style={{ background: 'white', borderRadius: '14px', padding: '2rem', width: '100%', maxWidth: '480px', boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
+              <h3 style={{ fontWeight: 800, fontSize: '1.05rem', color: '#7C3AED' }}>🔗 Öğrenci Portal Linki</h3>
+              <button onClick={() => setPortalModal(false)} style={{ background: 'none', border: 'none', fontSize: '1.1rem', cursor: 'pointer', color: 'var(--text-muted)' }}>✕</button>
+            </div>
+            <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '1.25rem', lineHeight: 1.6 }}>
+              Bu link üzerinden <strong>{initialStudent.firstName}</strong> kendi programını, sınav sonuçlarını ve koçun mesajını görebilir. Linki WhatsApp veya e-posta ile paylaşın.
+            </p>
+            {portalToken ? (
+              <>
+                <div style={{ background: '#F5F3FF', borderRadius: '8px', padding: '0.85rem 1rem', marginBottom: '1rem', wordBreak: 'break-all', fontSize: '0.82rem', color: '#7C3AED', fontWeight: 600, border: '1px solid #DDD6FE' }}>
+                  {typeof window !== 'undefined' ? `${window.location.origin}/portal/${portalToken}` : `/portal/${portalToken}`}
+                </div>
+                <div style={{ display: 'flex', gap: '0.6rem', marginBottom: '0.75rem' }}>
+                  <button onClick={() => { navigator.clipboard.writeText(`${window.location.origin}/portal/${portalToken}`); }} style={{ flex: 1, padding: '0.6rem', borderRadius: '8px', border: '1px solid #7C3AED', background: 'white', color: '#7C3AED', fontWeight: 700, fontSize: '0.82rem', cursor: 'pointer' }}>
+                    📋 Linki Kopyala
+                  </button>
+                  <button onClick={() => { const url = `${window.location.origin}/portal/${portalToken}`; window.open(`https://wa.me/${(initialStudent.parentPhone||'').replace(/\D/g,'')}?text=${encodeURIComponent(`${initialStudent.firstName} için koçluk portalı: ${url}`)}`, '_blank'); }}
+                    style={{ flex: 1, padding: '0.6rem', borderRadius: '8px', border: 'none', background: '#25D366', color: 'white', fontWeight: 700, fontSize: '0.82rem', cursor: 'pointer' }}>
+                    💬 WhatsApp Gönder
+                  </button>
+                </div>
+              </>
+            ) : (
+              <div style={{ background: '#FFF7ED', borderRadius: '8px', padding: '1rem', marginBottom: '1rem', fontSize: '0.85rem', color: '#92400E', border: '1px solid #FED7AA' }}>
+                Bu öğrenci için henüz portal linki oluşturulmadı.
+              </div>
+            )}
+            <button onClick={async () => { setGenToken(true); const r = await generatePortalToken(initialStudent.id); if (r.success) setPortalToken(r.token!); setGenToken(false); }}
+              disabled={isGenToken}
+              style={{ width: '100%', padding: '0.65rem', borderRadius: '8px', border: 'none', background: '#7C3AED', color: 'white', fontWeight: 700, fontSize: '0.85rem', cursor: 'pointer', opacity: isGenToken ? 0.6 : 1 }}>
+              {isGenToken ? '⏳ Oluşturuluyor...' : portalToken ? '🔄 Yeni Link Oluştur' : '✨ Portal Linki Oluştur'}
             </button>
-            <Link href={`/assignments?studentId=${initialStudent.id}`} className="btn-primary" style={{ flex: 1, padding: '0.75rem', fontSize: '0.85rem', background: 'linear-gradient(135deg, var(--primary), var(--secondary))', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
-              <span>🚀</span> AI Destekli Sihirbaz
-            </Link>
           </div>
         </div>
-      </header>
+      )}
 
-      <div style={{ display: 'flex', gap: '1rem', borderBottom: '1px solid var(--border)', marginBottom: '2rem' }}>
+      {/* ── ROZET PANELİ ─────────────────────────────────────── */}
+      {showBadgePanel && (
+        <div style={{ background: 'white', border: '1.5px solid #D97706', borderRadius: '12px', padding: '1.25rem', marginBottom: '1rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+            <h3 style={{ fontWeight: 800, fontSize: '0.95rem', color: '#D97706' }}>🏆 Rozet Ver — {initialStudent.firstName}</h3>
+            <button onClick={() => setBadgePanel(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: '1rem' }}>✕</button>
+          </div>
+          {/* Hazır Rozetler */}
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '1rem' }}>
+            {[
+              { icon: '🔥', title: 'Devamlılık' }, { icon: '🚀', title: 'Hızlı Yükseliş' },
+              { icon: '⭐', title: 'Hafta Yıldızı' }, { icon: '💪', title: 'Güçlü Çalışma' },
+              { icon: '🎯', title: 'Hedefe Ulaştı' }, { icon: '📈', title: 'Net Artışı' },
+              { icon: '🏅', title: 'Ödev Şampiyonu' }, { icon: '🧠', title: 'Zeka Küpü' },
+              { icon: '❤️', title: 'Azimli' }, { icon: '🌟', title: 'Üstün Başarı' },
+            ].map(b => (
+              <button key={b.title} onClick={async () => {
+                const r = await addBadge(initialStudent.id, b.title, b.icon);
+                if (r.success) setBadges(prev => [...prev, r.badge]);
+              }}
+                style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', padding: '0.4rem 0.75rem', borderRadius: '20px', border: '1px solid var(--border)', background: 'var(--bg-main)', fontWeight: 700, fontSize: '0.78rem', cursor: 'pointer' }}>
+                {b.icon} {b.title}
+              </button>
+            ))}
+          </div>
+          {/* Mevcut Rozetler */}
+          {badges.length > 0 && (
+            <div>
+              <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.5rem' }}>Kazanılan Rozetler ({badges.length})</div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
+                {badges.map((b: any) => (
+                  <div key={b.id} style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', padding: '0.3rem 0.65rem', borderRadius: '20px', background: '#FFFBEB', border: '1px solid #FDE68A', fontSize: '0.78rem', fontWeight: 700 }}>
+                    {b.icon} {b.title}
+                    <button onClick={async () => { await deleteBadge(b.id, initialStudent.id); setBadges(prev => prev.filter((x: any) => x.id !== b.id)); }}
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#EF4444', fontSize: '0.7rem', marginLeft: '0.2rem' }}>✕</button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── TAB NAVİGASYON ──────────────────────────────────── */}
+      <div style={{ background: 'white', border: '1px solid var(--border)', borderRadius: '10px', marginBottom: '1.25rem', display: 'flex', overflow: 'hidden' }}>
         {[
-          { id: 'karneler', label: '📄 Sınav Karneleri', count: exams.length },
-          { id: 'konular', label: '📚 Konu Takibi', count: exams.length > 0 ? 1 : 0 },
-          { id: 'programlar', label: '📅 Çalışma Programları', count: initialStudent.schedules?.length || 0 },
-          { id: 'kitaplar', label: '📚 Kitap Havuzu', count: initialStudent.books?.length || 0 },
-          { id: 'psikoloji', label: '🧠 Psikoloji & Kariyer', count: initialStudent.psychoRecords?.length || 0 },
-          { id: 'istatistik', label: '📈 Ödev Tamamlama Alanı', count: 2 }
-        ].map(tab => (
-          <button 
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
-            style={{ 
-              padding: '1rem 1.5rem', 
-              background: 'none', 
-              border: 'none', 
+          { id: 'genel',    label: 'Genel Bakış',    icon: '🏠', count: null },
+          { id: 'karneler', label: 'Sınav Karneleri', icon: '📊', count: exams.length },
+          { id: 'konular',  label: 'Konu Analizi',    icon: '📚', count: exams.length > 0 ? 1 : 0 },
+          { id: 'programlar',label: 'Çalışma Programı',icon: '📅', count: initialStudent.schedules?.length || 0 },
+          { id: 'kitaplar', label: 'Kaynak Havuzu',   icon: '📖', count: initialStudent.books?.length || 0 },
+          { id: 'psikoloji',label: 'Psikoloji',        icon: '🧠', count: initialStudent.psychoRecords?.length || 0 },
+          { id: 'istatistik',label: 'Ödev Takibi',    icon: '📈', count: null },
+        ].map((tab, i) => (
+          <button key={tab.id} onClick={() => setActiveTab(tab.id)}
+            style={{
+              flex: 1, padding: '0.75rem 0.5rem', border: 'none',
               borderBottom: activeTab === tab.id ? '3px solid var(--primary)' : '3px solid transparent',
+              borderRight: i < 6 ? '1px solid var(--border)' : 'none',
+              background: activeTab === tab.id ? '#F0F7FF' : 'white',
               color: activeTab === tab.id ? 'var(--primary)' : 'var(--text-secondary)',
-              fontWeight: activeTab === tab.id ? 700 : 500,
-              fontSize: '1rem',
-              cursor: 'pointer'
+              fontWeight: activeTab === tab.id ? 800 : 500,
+              fontSize: '0.75rem', cursor: 'pointer', transition: 'all 0.15s',
+              display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.2rem',
             }}>
-            {tab.label} <span style={{ background: 'var(--bg-main)', padding: '0.2rem 0.6rem', borderRadius: '10px', fontSize: '0.8rem', marginLeft: '0.5rem' }}>{tab.count}</span>
+            <span style={{ fontSize: '1rem' }}>{tab.icon}</span>
+            <span style={{ whiteSpace: 'nowrap' }}>{tab.label}</span>
+            {tab.count !== null && <span style={{ background: activeTab === tab.id ? 'var(--primary)' : 'var(--bg-main)', color: activeTab === tab.id ? 'white' : 'var(--text-muted)', borderRadius: '10px', padding: '0.05rem 0.4rem', fontSize: '0.65rem', fontWeight: 800 }}>{tab.count}</span>}
           </button>
         ))}
       </div>
+
+      {/* ── GENEL BAKIŞ SEKMESİ ──────────────────────────────── */}
+      {activeTab === 'genel' && (
+        <div style={{ animation: 'fadeIn 0.3s' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
+
+            {/* LGS Tahmini & Fırsat */}
+            <div style={{ background: 'white', border: '1px solid var(--border)', borderRadius: '10px', overflow: 'hidden' }}>
+              <div style={{ padding: '0.85rem 1.25rem', borderBottom: '1px solid var(--border)', fontWeight: 800, fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                🎯 LGS Performans Tahmini
+              </div>
+              {lgsPrediction ? (
+                <div style={{ padding: '1.25rem' }}>
+                  <div style={{ display: 'flex', gap: '1rem', marginBottom: '1rem' }}>
+                    <div style={{ flex: 1, background: 'linear-gradient(135deg, #1E3A8A, #3B82F6)', borderRadius: '10px', padding: '1rem', color: 'white', textAlign: 'center' }}>
+                      <div style={{ fontSize: '0.68rem', opacity: 0.8, marginBottom: '0.3rem' }}>TAHMİN PUAN</div>
+                      <div style={{ fontSize: '2.2rem', fontWeight: 900 }}>{lgsPrediction.score}</div>
+                      <div style={{ fontSize: '0.75rem', opacity: 0.8 }}>%{lgsPrediction.percentile} dilim</div>
+                    </div>
+                    <div style={{ flex: 1, background: '#F8FAFC', borderRadius: '10px', padding: '1rem' }}>
+                      <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', marginBottom: '0.3rem' }}>ORTALAMA NET</div>
+                      <div style={{ fontSize: '1.8rem', fontWeight: 900, color: 'var(--primary)' }}>{lgsPrediction.avgNet}</div>
+                      <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Son 3 deneme</div>
+                    </div>
+                  </div>
+                  {lgsPrediction.opportunities.length > 0 && (
+                    <div>
+                      <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '0.5rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Öncelikli Konu Fırsatları</div>
+                      {lgsPrediction.opportunities.slice(0,3).map((o: any, i: number) => (
+                        <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '0.4rem 0.6rem', background: '#F0FDF4', borderRadius: '6px', marginBottom: '0.3rem', fontSize: '0.78rem' }}>
+                          <span style={{ fontWeight: 600 }}>{o.subject}</span>
+                          <span style={{ fontWeight: 800, color: '#10B981' }}>+{o.potentialIncrease} puan</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.85rem' }}>Tahmin için en az 1 sınav yükleyin</div>
+              )}
+            </div>
+
+            {/* Seans & Program Özeti */}
+            <div style={{ background: 'white', border: '1px solid var(--border)', borderRadius: '10px', overflow: 'hidden' }}>
+              <div style={{ padding: '0.85rem 1.25rem', borderBottom: '1px solid var(--border)', fontWeight: 800, fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                📋 Koçluk Süreci Özeti
+              </div>
+              <div style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+                {/* Seans İlerlemesi */}
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', fontWeight: 700, marginBottom: '0.4rem' }}>
+                    <span>🤝 Seans İlerlemesi</span>
+                    <span style={{ color: 'var(--primary)' }}>{completedSessions}/{totalSessions}</span>
+                  </div>
+                  <div style={{ height: '7px', background: '#E2E8F0', borderRadius: '4px', overflow: 'hidden' }}>
+                    <div style={{ height: '100%', width: `${sessionProgressPct}%`, background: 'linear-gradient(90deg, var(--primary), #60A5FA)', borderRadius: '4px' }} />
+                  </div>
+                </div>
+                {/* Program Tamamlama */}
+                {programPct !== null && (
+                  <div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', fontWeight: 700, marginBottom: '0.4rem' }}>
+                      <span>📅 Haftalık Program</span>
+                      <span style={{ color: programColor }}>%{programPct}</span>
+                    </div>
+                    <div style={{ height: '7px', background: '#E2E8F0', borderRadius: '4px', overflow: 'hidden' }}>
+                      <div style={{ height: '100%', width: `${programPct}%`, background: programColor, borderRadius: '4px' }} />
+                    </div>
+                  </div>
+                )}
+                {/* Psikolojik Trend */}
+                {lastPsycho && (
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.5rem', paddingTop: '0.5rem', borderTop: '1px dashed var(--border)' }}>
+                    {[
+                      { label: 'Motivasyon', val: lastPsycho.motivationLevel, color: lastPsycho.motivationLevel >= 6 ? '#10B981' : '#EF4444' },
+                      { label: 'Odak', val: lastPsycho.focusLevel, color: lastPsycho.focusLevel >= 6 ? '#10B981' : '#F59E0B' },
+                      { label: 'Kaygı', val: lastPsycho.anxietyLevel, color: lastPsycho.anxietyLevel <= 5 ? '#10B981' : '#EF4444' },
+                    ].map(m => (
+                      <div key={m.label} style={{ textAlign: 'center', background: '#F8FAFC', borderRadius: '8px', padding: '0.5rem' }}>
+                        <div style={{ fontSize: '1.2rem', fontWeight: 900, color: m.color }}>{m.val}</div>
+                        <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', fontWeight: 600 }}>{m.label}</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {/* Hızlı Aksiyon */}
+                <div style={{ display: 'flex', gap: '0.5rem', paddingTop: '0.5rem' }}>
+                  <button onClick={() => setActiveTab('psikoloji')} style={{ flex: 1, padding: '0.5rem', borderRadius: '7px', border: '1px solid var(--border)', background: 'white', fontSize: '0.75rem', fontWeight: 700, cursor: 'pointer' }}>
+                    + Psikoloji Notu
+                  </button>
+                  <button onClick={() => setShowPsychoForm(true)} style={{ flex: 1, padding: '0.5rem', borderRadius: '7px', border: 'none', background: 'var(--primary)', color: 'white', fontSize: '0.75rem', fontWeight: 700, cursor: 'pointer' }}>
+                    + Seans Kaydı
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Sınav Karşılaştırma Grafiği */}
+          {comparisonChartData && (
+            <div style={{ background: 'white', border: '1px solid var(--border)', borderRadius: '10px', padding: '1.25rem', marginBottom: '1rem' }}>
+              <div style={{ fontWeight: 800, fontSize: '0.9rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                📊 Ders Bazlı: Genel Ortalama vs. Son Sınav
+              </div>
+              <div style={{ height: '250px', width: '100%' }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={comparisonChartData} margin={{ top: 10, right: 20, left: 0, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F1F5F9" />
+                    <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#64748B', fontWeight: 700, fontSize: 12 }} />
+                    <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94A3B8', fontSize: 11 }} />
+                    <Tooltip contentStyle={{ borderRadius: '8px', border: '1px solid #E2E8F0', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }} />
+                    <Legend wrapperStyle={{ paddingTop: '10px', fontSize: '13px' }} />
+                    <Bar dataKey="avgNet" name="Genel Ortalama" fill="#CBD5E1" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="latestNet" name="Son Sınav" fill="#2563EB" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {activeTab === 'karneler' && (
         <section style={{ animation: 'fadeIn 0.3s' }}>
@@ -2467,6 +2755,6 @@ export default function ClientPage({ initialStudent }: { initialStudent: any }) 
       {/* Kanban Planner Modal */}
       {showKanban && <KanbanPlanner student={initialStudent} onClose={() => setShowKanban(false)} />}
 
-    </main>
+    </div>
   );
 }

@@ -19,9 +19,9 @@ const NAV_GROUPS: NavGroup[] = [
     label: 'Koçluk Portföyü',
     defaultOpen: true,
     items: [
-      { label: 'Öğrenci Listesi',         href: '/students'  },
+      { label: 'Öğrenci Listesi',           href: '/students'  },
       { label: 'Seans & Görüşme Kayıtları', href: '/sessions'  },
-      { label: 'Veli İletişim Köprüsü',   href: '/parents'   },
+      { label: 'Veli İletişim Köprüsü',     href: '/parents'   },
     ],
   },
   {
@@ -40,6 +40,33 @@ const NAV_GROUPS: NavGroup[] = [
     defaultOpen: true,
     items: [
       { label: 'Haftalık Program Hazırla', href: '/assignments' },
+    ],
+  },
+  {
+    id: 'takvim',
+    icon: '🗓️',
+    label: 'Takvim',
+    defaultOpen: false,
+    items: [
+      { label: 'Seans Takvimi', href: '/takvim' },
+    ],
+  },
+  {
+    id: 'tercih',
+    icon: '🎯',
+    label: 'Tercih Danışmanlığı',
+    defaultOpen: false,
+    items: [
+      { label: 'Okul Eşleştirme & Tercih', href: '/tercih' },
+    ],
+  },
+  {
+    id: 'reports',
+    icon: '📈',
+    label: 'Gelişim Raporları',
+    defaultOpen: false,
+    items: [
+      { label: 'Rapor Oluştur', href: '/reports' },
     ],
   },
   {

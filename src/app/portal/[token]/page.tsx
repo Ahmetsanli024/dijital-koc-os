@@ -6,9 +6,12 @@ export default async function PortalPage(props: { params: Promise<{ token: strin
   const student = await prisma.student.findUnique({
     where: { portalToken: params.token },
     include: {
-      exams: { orderBy: { date: 'desc' }, take: 10 },
-      schedules: { include: { tasks: true }, orderBy: { createdAt: 'desc' }, take: 1 },
-      badges: { orderBy: { dateAwarded: 'desc' } }
+      exams:         { orderBy: { date: 'desc' }, take: 5 },
+      schedules:     { include: { tasks: true }, orderBy: { createdAt: 'desc' }, take: 1 },
+      badges:        { orderBy: { dateAwarded: 'desc' } },
+      psychoRecords: { orderBy: { date: 'desc' }, take: 1 },
+      sessions:      { orderBy: { date: 'desc' }, take: 1, select: { id: true, date: true, title: true } },
+      appointments:  { where: { status: 'SCHEDULED', date: { gte: new Date() } }, orderBy: { date: 'asc' }, take: 1 },
     }
   });
 

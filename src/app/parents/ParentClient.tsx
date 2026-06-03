@@ -1,304 +1,246 @@
 'use client';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useTransition } from 'react';
 import { logParentCommunication, markAsSent } from '../actions/parent';
+import PageHeader from '../components/PageHeader';
+
+const TOPICS = [
+  'Genel Değerlendirme', 'Deneme Analizi', 'Program Güncellemesi',
+  'Motivasyon Desteği', 'Sınav Strateji', 'Acil Görüşme Talebi',
+];
+
+const TEMPLATES: Record<string, (name: string, parent: string, examInfo: string, weakInfo: string) => string> = {
+  'Genel Değerlendirme': (n, p, e, w) =>
+    `Sayın ${p},\n\n${n} ile bu haftaki koçluk seansımızı gerçekleştirdik. ${e ? `Son denemesinde ${e}. ` : ''}Genel gidişat olumlu seyrediyor; belirlediğimiz hedeflere yönelik programı titizlikle takip ediyoruz.\n\n${w ? `Özellikle ${w} konularında ek çalışma yapmasını önerdim. ` : ''}Evde çalışma disiplinini koruması bu süreçte çok önemli.\n\nHer türlü soru için ulaşabilirsiniz. İyi günler,\n\nAhmet ŞANLI\nEğitim Koçu`,
+  'Deneme Analizi': (n, p, e, w) =>
+    `Sayın ${p},\n\n${n}'nin ${e ? e + ' sonuçlarını' : 'son deneme sonuçlarını'} birlikte değerlendirdik.\n\n${w ? `📌 Öncelikli çalışılması gereken alanlar: ${w}\n\n` : ''}Bu eksiklikler göz önünde bulundurularak önümüzdeki haftanın programı güncellendi. Konuların pekiştirilmesi için düzenli ve odaklı çalışma süreci kritik önem taşıyor.\n\nSaygılarımla,\n\nAhmet ŞANLI\nEğitim Koçu`,
+  'Motivasyon Desteği': (n, p, _e, _w) =>
+    `Sayın ${p},\n\nBu hafta ${n} ile motivasyon ve hedef odaklı bir görüşme yaptık. Sınav sürecinde zaman zaman karşılaşılan yorgunluk ve motivasyon dalgalanmaları son derece normaldir.\n\n${n}'e evde pozitif ve destekleyici bir ortam sağlamanız bu süreçte büyük fark yaratır. Baskı yerine teşvik, eleştiri yerine güven verici bir yaklaşım benimsemenizi öneririm.\n\nBirlikte başaracağız. İyi günler,\n\nAhmet ŞANLI\nEğitim Koçu`,
+  'Program Güncellemesi': (n, p, _e, w) =>
+    `Sayın ${p},\n\n${n}'nin bireysel gelişim programı güncellendi. ${w ? `${w} konularına daha fazla ağırlık verecek şekilde yeniden düzenlendi.` : 'Mevcut performansa göre optimize edildi.'}\n\nYeni program doğrultusunda günlük hedeflerin takip edilmesi büyük önem taşımaktadır. Herhangi bir aksaklık durumunda lütfen benimle iletişime geçin.\n\nSaygılarımla,\n\nAhmet ŞANLI\nEğitim Koçu`,
+  'Sınav Strateji': (n, p, _e, _w) =>
+    `Sayın ${p},\n\n${n} ile sınav strateji ve zaman yönetimi üzerine kapsamlı bir görüşme gerçekleştirdik. Sınava yaklaşırken yoğunluğu kademeli artırmak, güçlü konuları pekiştirmek ve sınav günü rutinini oturtmak üzerine yol haritası oluşturduk.\n\nSinav günü saatinde uyanma ve beslenme düzenine dikkat edilmesini önemle rica ederim.\n\nSaygılarımla,\n\nAhmet ŞANLI\nEğitim Koçu`,
+  'Acil Görüşme Talebi': (n, p, _e, _w) =>
+    `Sayın ${p},\n\n${n} ile ilgili önemli bir konuyu sizinle paylaşmak istiyorum. En kısa sürede bir görüşme ayarlamamız gerektiğini düşünüyorum.\n\nMüsait olduğunuz bir zamanı belirtirseniz görüşme ayarlayabiliriz.\n\nSaygılarımla,\n\nAhmet ŞANLI\nEğitim Koçu`,
+};
 
 export default function ParentClient({ students }: { students: any[] }) {
-  const [selectedStudentId, setSelectedStudentId] = useState('');
-  const [topic, setTopic] = useState('Genel Değerlendirme');
-  const [message, setMessage] = useState('');
-  const [isSaving, setIsSaving] = useState(false);
-  const [isListening, setIsListening] = useState(false);
+  const [selectedId, setSelectedId]   = useState('');
+  const [topic, setTopic]             = useState(TOPICS[0]);
+  const [message, setMessage]         = useState('');
+  const [isSaving, setIsSaving]       = useState(false);
+  const [toast, setToast]             = useState('');
+  const [, startTransition]           = useTransition();
 
-  const selectedStudent = students.find(s => s.id === selectedStudentId);
+  const student    = students.find(s => s.id === selectedId);
+  const allDrafts  = students.flatMap(s => (s.parentComms || []).filter((c: any) => c.isDraft).map((c: any) => ({ ...c, student: s })));
+  const allHistory = students.flatMap(s => (s.parentComms || []).filter((c: any) => !c.isDraft).map((c: any) => ({ ...c, student: s }))).sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
-  // All drafts
-  const drafts = students.flatMap(s => (s.parentComms || []).map((c:any) => ({...c, student: s}))).filter(c => c.isDraft);
+  const showToast = (m: string) => { setToast(m); setTimeout(() => setToast(''), 3000); };
 
-  // Generate AI default message
+  // Otomatik şablon üretimi
   useEffect(() => {
-    if (selectedStudent) {
-      if (topic === 'Deneme Analizi' || topic === 'Genel Değerlendirme') {
-        const exams = selectedStudent.exams || [];
-        if (exams.length > 0) {
-          const latestExam = exams[0];
-          let weakTopicsText = '[İlgili Dersler ve Konular]';
-          if (latestExam.aiTopics) {
-            try {
-              const subjects = JSON.parse(latestExam.aiTopics);
-              const weakList: string[] = [];
-              subjects.forEach((sub: any) => {
-                if (sub.topics && Array.isArray(sub.topics)) {
-                  const weaks = sub.topics.filter((t: any) => t.isWeak || t.percentage < 50).map((t: any) => t.name);
-                  if (weaks.length > 0) {
-                    weakList.push(`${sub.name} dersinden ${weaks.join(', ')}`);
-                  }
-                } else if (sub.weakTopic) {
-                  weakList.push(`${sub.name} dersinden ${sub.weakTopic}`);
-                }
-              });
-              if (weakList.length > 0) {
-                weakTopicsText = weakList.join('; ');
-              }
-            } catch(e) {}
-          }
-          
-          let bodyText = `Öğrencimiz ${selectedStudent.firstName} ile bu haftaki görüşmemizde genel akademik durumu, ders ve konu gelişim düzeyi üzerine değerlendirmeler yapılmıştır.\n\nSon analizlerimize göre öğrencimizin özellikle ${weakTopicsText} konularında eksiklikleri bulunduğu tespit edilmiştir. Bu açıkları kapatmak ve konu gelişimini desteklemek amacıyla gerekli rehberlik yönlendirmeleri yapılmış ve önümüzdeki hafta için kendisine özel ders çalışma planı hazırlanmıştır.`;
-
-          setMessage(`Sayın Velimiz ${selectedStudent.parentName || ''},\n\n${bodyText}\n\nDesteğiniz için teşekkür ederim. İyi günler dilerim.\n\nAhmet ŞANLI\nEğitim Danışmanı ve Rehber Öğretmen`);
-        } else {
-          setMessage(`Sayın Velimiz ${selectedStudent.parentName || ''},\n\nÖğrencimiz ${selectedStudent.firstName} ile ilgili genel değerlendirmelerimiz aşağıdadır:\n\n[Değerlendirme Notu...]\n\nDesteğiniz için teşekkür ederim. İyi günler dilerim.\n\nAhmet ŞANLI\nEğitim Danışmanı ve Rehber Öğretmen`);
-        }
-      } else {
-        setMessage(`Sayın Velimiz ${selectedStudent.parentName || ''},\n\nÖğrencimiz ${selectedStudent.firstName} ile ilgili ${topic} konulu bilgilendirme aşağıdadır:\n\n[Bilgilendirme Notu...]\n\nDesteğiniz için teşekkür ederim. İyi günler dilerim.\n\nAhmet ŞANLI\nEğitim Danışmanı ve Rehber Öğretmen`);
-      }
-    } else {
-      setMessage('');
+    if (!student) { setMessage(''); return; }
+    const e = student.exams?.[0] ? `${student.exams[0].name} — ${student.exams[0].totalNet} net` : '';
+    let w = '';
+    if (student.exams?.[0]?.aiTopics) {
+      try {
+        const subs = JSON.parse(student.exams[0].aiTopics);
+        const list: string[] = [];
+        subs.forEach((s: any) => {
+          const weaks = (s.topics || []).filter((t: any) => t.isWeak || t.percentage < 50).map((t: any) => t.name);
+          if (weaks.length) list.push(`${s.name}: ${weaks.slice(0,2).join(', ')}`);
+        });
+        w = list.slice(0, 2).join('; ');
+      } catch {}
     }
-  }, [selectedStudentId, topic, students]);
+    const fn = TEMPLATES[topic] || TEMPLATES['Genel Değerlendirme'];
+    setMessage(fn(student.firstName, student.parentName || 'Velimiz', e, w));
+  }, [selectedId, topic, students]);
 
-  const handleSendAndSave = async (isDraft: boolean) => {
-    if (!selectedStudent) return;
+  const handleSave = async (isDraft: boolean) => {
+    if (!student || !message.trim()) { showToast('Öğrenci seçin ve mesaj girin.'); return; }
     setIsSaving(true);
-    
-    // Save to DB
-    const res = await logParentCommunication(selectedStudent.id, topic, message, isDraft);
+    const res = await logParentCommunication(student.id, topic, message, isDraft);
     setIsSaving(false);
-    
     if (res.success) {
       if (!isDraft) {
-        // Open WhatsApp
-        const phone = selectedStudent.parentPhone ? selectedStudent.parentPhone.replace(/[^0-9]/g, '') : '';
-        const waUrl = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
-        window.open(waUrl, '_blank');
+        const phone = (student.parentPhone || '').replace(/\D/g, '');
+        window.open(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`, '_blank');
+        showToast('Mesaj WhatsApp\'ta açıldı ✅');
       } else {
-        alert('Taslak olarak kaydedildi. Bekleyen Taslaklar listesinden gönderebilirsiniz.');
-        setSelectedStudentId('');
+        showToast('Taslak kaydedildi 💾');
       }
     } else {
-      alert('Kayıt sırasında bir hata oluştu: ' + res.error);
+      showToast('Hata: ' + res.error);
     }
   };
 
-  const toggleListen = () => {
-    if (isListening) {
-      setIsListening(false);
-      // Window.speechRecognition would be stopped by the browser when we don't restart it or manually stop it.
-      return;
-    }
-    
-    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-      alert("Tarayıcınız sesli asistanı desteklemiyor. Lütfen Chrome, Edge veya Safari kullanın.");
-      return;
-    }
-
-    const recognition = new SpeechRecognition();
-    recognition.lang = 'tr-TR';
-    recognition.interimResults = true;
-    recognition.continuous = true;
-
-    recognition.onstart = () => {
-      setIsListening(true);
-    };
-
-    recognition.onresult = (event: any) => {
-      let finalTranscript = '';
-      for (let i = event.resultIndex; i < event.results.length; ++i) {
-        if (event.results[i].isFinal) {
-          finalTranscript += event.results[i][0].transcript + ' ';
-        }
+  const handleSendDraft = async (draftId: string, phone: string, text: string) => {
+    startTransition(async () => {
+      const res = await markAsSent(draftId);
+      if (res.success) {
+        window.open(`https://wa.me/${phone.replace(/\D/g,'')}?text=${encodeURIComponent(text)}`, '_blank');
+        showToast('Gönderildi ✅');
       }
-      if (finalTranscript) {
-        setMessage(prev => prev + ' ' + finalTranscript.trim());
-      }
-    };
-
-    recognition.onerror = (event: any) => {
-      console.error('Speech error', event.error);
-      setIsListening(false);
-    };
-
-    recognition.onend = () => {
-      // If still isListening, restart it (continuous listening), else stop
-      if (isListening) {
-        setIsListening(false); // For safety, let user click again.
-      }
-    };
-
-    recognition.start();
+    });
   };
 
-  const handleSendDraft = async (draftId: string, phoneStr: string, text: string) => {
-    const res = await markAsSent(draftId);
-    if (res.success) {
-        const phone = phoneStr ? phoneStr.replace(/[^0-9]/g, '') : '';
-        const waUrl = `https://wa.me/${phone}?text=${encodeURIComponent(text)}`;
-        window.open(waUrl, '_blank');
-    } else {
-        alert('Hata: ' + res.error);
-    }
-  };
+  const iS: React.CSSProperties = { width: '100%', padding: '0.65rem 0.9rem', borderRadius: '8px', border: '1px solid var(--border)', fontSize: '0.88rem', outline: 'none', background: 'var(--bg-main)', fontFamily: 'inherit' };
 
   return (
-    <main style={{ maxWidth: '1200px', margin: '0 auto', width: '100%', display: 'flex', gap: '2rem', alignItems: 'flex-start' }}>
-      
-      {/* Sol Panel: Liste ve Form */}
-      <div style={{ flex: 1 }}>
-        <header style={{ marginBottom: '2.5rem' }}>
-          <h1 style={{ fontSize: '2.2rem', fontWeight: 800, color: 'var(--text-primary)', marginBottom: '0.5rem', letterSpacing: '-0.03em' }}>
-            Veli İletişim CRM Envanteri
-          </h1>
-          <p style={{ color: 'var(--text-secondary)', fontSize: '1rem' }}>Öğrencilerin veli iletişim geçmişini takip edin ve yeni mesajlar gönderin.</p>
-        </header>
+    <div style={{ maxWidth: '1200px', width: '100%' }}>
+      {toast && <div style={{ position: 'fixed', top: '1.5rem', right: '1.5rem', zIndex: 9999, padding: '0.65rem 1.25rem', borderRadius: '8px', background: '#10B981', color: 'white', fontWeight: 700 }}>{toast}</div>}
 
-        <section className="card" style={{ marginBottom: '2rem', padding: '1.5rem', overflowX: 'auto' }}>
-          <h3 style={{ fontSize: '1.1rem', fontWeight: 700, marginBottom: '1.5rem' }}>Öğrenci ve Veli Listesi</h3>
-          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.9rem' }}>
-            <thead>
-              <tr style={{ borderBottom: '2px solid var(--border)', color: 'var(--text-secondary)' }}>
-                <th style={{ padding: '0.75rem', fontWeight: 600 }}>Öğrenci</th>
-                <th style={{ padding: '0.75rem', fontWeight: 600 }}>Son İletişim</th>
-                <th style={{ padding: '0.75rem', fontWeight: 600, textAlign: 'right' }}>İşlem</th>
-              </tr>
-            </thead>
-            <tbody>
-              {students.map(student => {
-                const lastComm = student.parentComms && student.parentComms.length > 0 ? student.parentComms.find((c:any)=>!c.isDraft) : null;
-                const isSelected = selectedStudentId === student.id;
-                return (
-                  <tr key={student.id} style={{ borderBottom: '1px solid var(--border)', background: isSelected ? 'rgba(16, 185, 129, 0.05)' : 'transparent', transition: 'background 0.2s' }}>
-                    <td style={{ padding: '1rem 0.75rem', fontWeight: 600 }}>
-                        {student.firstName} {student.lastName}
-                        <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontWeight: 400 }}>{student.parentName || '-'} ({student.parentPhone || 'Tel Yok'})</div>
-                    </td>
-                    <td style={{ padding: '1rem 0.75rem', color: 'var(--text-secondary)' }}>
-                      {lastComm ? new Date(lastComm.date).toLocaleDateString('tr-TR') : '-'}
-                    </td>
-                    <td style={{ padding: '1rem 0.75rem', textAlign: 'right' }}>
-                      <button 
-                        onClick={() => setSelectedStudentId(student.id)}
-                        className={isSelected ? "btn-primary" : "btn-secondary"} 
-                        style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem' }}>
-                        {isSelected ? 'Seçildi' : 'Seç'}
-                      </button>
-                    </td>
-                  </tr>
-                );
-              })}
-              {students.length === 0 && (
-                <tr>
-                  <td colSpan={3} style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-secondary)' }}>Kayıtlı öğrenci bulunamadı.</td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </section>
+      <PageHeader title="Veli İletişim Köprüsü" subtitle="Profesyonel veli bildirimleri, taslak yönetimi ve iletişim geçmişi"
+        breadcrumb={['Ana Sayfa', 'Veli İletişimi']} />
 
-        {selectedStudent && (
-          <section className="card" style={{ padding: '2rem', animation: 'fadeIn 0.3s' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1.5rem' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.5fr', gap: '1.25rem', alignItems: 'start' }}>
+
+        {/* SOL: Yeni Mesaj */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+          <div style={{ background: 'white', border: '1px solid var(--border)', borderRadius: '12px', overflow: 'hidden' }}>
+            <div style={{ padding: '0.85rem 1.25rem', borderBottom: '1px solid var(--border)', fontWeight: 800, fontSize: '0.9rem' }}>
+              ✍️ Yeni Veli Mesajı
+            </div>
+            <div style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
               <div>
-                <h3 style={{ fontSize: '1.25rem', fontWeight: 700, marginBottom: '0.25rem' }}>Yeni Görüşme Kaydı</h3>
-                <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Öğrenci: <strong>{selectedStudent.firstName} {selectedStudent.lastName}</strong></p>
+                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '0.35rem' }}>Öğrenci</label>
+                <select value={selectedId} onChange={e => setSelectedId(e.target.value)} style={iS}>
+                  <option value="">— Seçin —</option>
+                  {students.map(s => (
+                    <option key={s.id} value={s.id}>
+                      {s.firstName} {s.lastName} {s.parentPhone ? `· ${s.parentPhone}` : ''}
+                    </option>
+                  ))}
+                </select>
               </div>
-              
-              <select 
-                value={topic}
-                onChange={(e) => setTopic(e.target.value)}
-                style={{ padding: '0.5rem 1rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'white', fontWeight: 600 }}>
-                <option value="Genel Değerlendirme">Genel Değerlendirme</option>
-                <option value="Deneme Analizi">Deneme Analizi</option>
-                <option value="Ödev Kontrolü">Ödev Kontrolü</option>
-                <option value="Motivasyon Görüşmesi">Motivasyon Görüşmesi</option>
-                <option value="Devamsızlık/Gecikme">Devamsızlık/Gecikme</option>
-                <option value="Diğer">Diğer</option>
-              </select>
-            </div>
 
-            <div style={{ position: 'relative' }}>
-              <textarea 
-                value={message}
-                onChange={(e) => setMessage(e.target.value)}
-                style={{ width: '100%', height: '250px', padding: '1.5rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'var(--bg-main)', fontSize: '0.95rem', lineHeight: '1.6', resize: 'vertical', outline: 'none', fontFamily: 'var(--font-sans)' }}
-              />
-              <button 
-                onClick={toggleListen}
-                title="Sesle Yazdır (Mikrofon)"
-                style={{ 
-                  position: 'absolute', bottom: '1.5rem', right: '1.5rem',
-                  width: '45px', height: '45px', borderRadius: '50%',
-                  background: isListening ? 'var(--danger)' : 'var(--bg-card)',
-                  color: isListening ? 'white' : 'var(--text-secondary)',
-                  border: `1px solid ${isListening ? 'var(--danger)' : 'var(--border)'}`,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: '1.2rem', cursor: 'pointer',
-                  boxShadow: isListening ? '0 0 15px rgba(239, 68, 68, 0.4)' : 'var(--shadow-sm)',
-                  transition: 'var(--transition)'
-                }}>
-                {isListening ? '🛑' : '🎙️'}
-              </button>
-            </div>
-
-            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '1.5rem', gap: '1rem' }}>
-              <button 
-                onClick={() => handleSendAndSave(true)}
-                disabled={isSaving || !selectedStudent.parentPhone}
-                className="btn-secondary" 
-                style={{ padding: '0.85rem 1.5rem', fontSize: '0.95rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <span>📝</span> Taslak Olarak Kaydet
-              </button>
-              <button 
-                onClick={() => handleSendAndSave(false)}
-                disabled={isSaving || !selectedStudent.parentPhone}
-                className="btn-primary" 
-                style={{ background: '#25D366', color: 'white', border: 'none', padding: '0.85rem 1.5rem', fontSize: '0.95rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <span style={{ fontSize: '1.2rem' }}>💬</span> WhatsApp'ta Gönder
-              </button>
-            </div>
-            {!selectedStudent.parentPhone && (
-              <p style={{ textAlign: 'right', color: '#ef4444', fontSize: '0.8rem', marginTop: '0.5rem' }}>Bu öğrencinin kayıtlı bir veli telefonu bulunmuyor.</p>
-            )}
-          </section>
-        )}
-      </div>
-
-      {/* Sağ Panel: Taslaklar */}
-      <div style={{ width: '350px' }}>
-        <section className="card" style={{ background: 'linear-gradient(to bottom, #f8fafc, white)' }}>
-          <h3 style={{ fontSize: '1.1rem', fontWeight: 800, marginBottom: '0.5rem', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <span>📝</span> Bekleyen Taslaklar ({drafts.length})
-          </h3>
-          <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '1.5rem' }}>
-            Hafta sonu hazırladığınız mesajları buradan tek tıkla sırayla gönderebilirsiniz.
-          </p>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-            {drafts.length === 0 && (
-              <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.9rem', border: '1px dashed var(--border)', borderRadius: 'var(--radius-md)' }}>
-                Bekleyen taslak mesajınız yok.
-              </div>
-            )}
-            {drafts.map((draft:any) => (
-              <div key={draft.id} style={{ background: 'white', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '1rem', boxShadow: 'var(--shadow-sm)' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
-                  <span style={{ fontWeight: 700, fontSize: '0.9rem' }}>{draft.student.firstName} {draft.student.lastName}</span>
-                  <span style={{ fontSize: '0.75rem', background: 'var(--bg-main)', padding: '0.2rem 0.5rem', borderRadius: '4px', color: 'var(--primary)', fontWeight: 600 }}>{draft.topic}</span>
+              {student && (
+                <div style={{ display: 'flex', gap: '0.5rem', padding: '0.65rem 0.85rem', background: '#F0FDF4', borderRadius: '8px', border: '1px solid #BBF7D0', fontSize: '0.8rem' }}>
+                  <div>
+                    <div style={{ fontWeight: 700 }}>Veli: {student.parentName || '—'}</div>
+                    <div style={{ color: '#16A34A' }}>{student.parentPhone || 'Telefon girilmemiş'}</div>
+                  </div>
+                  {student.exams?.[0] && (
+                    <div style={{ marginLeft: 'auto', textAlign: 'right' }}>
+                      <div style={{ fontWeight: 700, color: '#2563EB' }}>{student.exams[0].totalNet} net</div>
+                      <div style={{ color: '#94A3B8', fontSize: '0.72rem' }}>{student.exams[0].name}</div>
+                    </div>
+                  )}
                 </div>
-                <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '1rem', display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
-                  {draft.message}
-                </p>
-                <button 
-                  onClick={() => handleSendDraft(draft.id, draft.student.parentPhone, draft.message)}
-                  className="btn-primary" 
-                  style={{ width: '100%', padding: '0.5rem', fontSize: '0.85rem', background: '#25D366', color: 'white', border: 'none', display: 'flex', justifyContent: 'center', gap: '0.5rem' }}>
-                  Gönder ve Taslaktan Çıkar 🚀
+              )}
+
+              <div>
+                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '0.35rem' }}>Mesaj Konusu</label>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem' }}>
+                  {TOPICS.map(t => (
+                    <button key={t} onClick={() => setTopic(t)}
+                      style={{ padding: '0.3rem 0.65rem', borderRadius: '20px', border: 'none', fontSize: '0.75rem', fontWeight: 700, cursor: 'pointer', transition: 'all 0.15s',
+                        background: topic === t ? 'var(--primary)' : 'var(--bg-main)',
+                        color: topic === t ? 'white' : 'var(--text-secondary)' }}>
+                      {t}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
+                  <label style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)' }}>Mesaj İçeriği</label>
+                  <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>{message.length} karakter</span>
+                </div>
+                <textarea rows={10} value={message} onChange={e => setMessage(e.target.value)}
+                  placeholder="Öğrenci seçince otomatik mesaj oluşturulur. Düzenleyebilirsiniz."
+                  style={{ ...iS, resize: 'vertical', lineHeight: 1.65, fontSize: '0.85rem' }} />
+              </div>
+
+              <div style={{ display: 'flex', gap: '0.6rem' }}>
+                <button onClick={() => handleSave(true)} disabled={isSaving || !selectedId}
+                  style={{ flex: 1, padding: '0.65rem', borderRadius: '8px', border: '1px solid var(--border)', background: 'white', fontWeight: 700, fontSize: '0.85rem', cursor: 'pointer', opacity: (!selectedId || isSaving) ? 0.5 : 1 }}>
+                  💾 Taslak Kaydet
                 </button>
+                <button onClick={() => handleSave(false)} disabled={isSaving || !selectedId}
+                  style={{ flex: 1, padding: '0.65rem', borderRadius: '8px', border: 'none', background: '#25D366', color: 'white', fontWeight: 700, fontSize: '0.85rem', cursor: 'pointer', opacity: (!selectedId || isSaving) ? 0.5 : 1 }}>
+                  {isSaving ? '⏳ Kaydediliyor...' : '💬 WhatsApp Gönder'}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Bekleyen Taslaklar */}
+          {allDrafts.length > 0 && (
+            <div style={{ background: 'white', border: '1px solid var(--border)', borderRadius: '12px', overflow: 'hidden' }}>
+              <div style={{ padding: '0.85rem 1.25rem', borderBottom: '1px solid var(--border)', fontWeight: 800, fontSize: '0.9rem', display: 'flex', justifyContent: 'space-between' }}>
+                <span>📌 Bekleyen Taslaklar</span>
+                <span style={{ background: '#FEF3C7', color: '#92400E', borderRadius: '12px', padding: '0.1rem 0.5rem', fontSize: '0.72rem', fontWeight: 800 }}>{allDrafts.length}</span>
+              </div>
+              <div style={{ padding: '0.85rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                {allDrafts.map((d: any) => (
+                  <div key={d.id} style={{ padding: '0.75rem', background: '#FFFBEB', borderRadius: '8px', border: '1px solid #FDE68A' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '0.5rem' }}>
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ fontWeight: 700, fontSize: '0.85rem' }}>{d.student.firstName} {d.student.lastName}</div>
+                        <div style={{ fontSize: '0.72rem', color: '#92400E' }}>{d.topic} · {new Date(d.date).toLocaleDateString('tr-TR')}</div>
+                      </div>
+                      <button onClick={() => handleSendDraft(d.id, d.student.parentPhone || '', d.message)}
+                        style={{ padding: '0.3rem 0.6rem', borderRadius: '6px', border: 'none', background: '#25D366', color: 'white', fontWeight: 700, fontSize: '0.7rem', cursor: 'pointer', flexShrink: 0 }}>
+                        Gönder
+                      </button>
+                    </div>
+                    <p style={{ fontSize: '0.75rem', color: '#78350F', marginTop: '0.35rem', lineHeight: 1.5, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' as const }}>
+                      {d.message}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* SAĞ: İletişim Geçmişi */}
+        <div style={{ background: 'white', border: '1px solid var(--border)', borderRadius: '12px', overflow: 'hidden' }}>
+          <div style={{ padding: '0.85rem 1.25rem', borderBottom: '1px solid var(--border)', fontWeight: 800, fontSize: '0.9rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span>📋 Tüm İletişim Geçmişi</span>
+            <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)', fontWeight: 500 }}>{allHistory.length} mesaj</span>
+          </div>
+          <div style={{ maxHeight: '620px', overflowY: 'auto', padding: '0.85rem', display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
+            {allHistory.length === 0 ? (
+              <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>
+                <div style={{ fontSize: '2.5rem', marginBottom: '0.75rem' }}>💬</div>
+                <div style={{ fontWeight: 600 }}>Henüz gönderilmiş mesaj yok</div>
+                <div style={{ fontSize: '0.82rem', marginTop: '0.3rem' }}>Sol taraftan ilk veli mesajınızı gönderin</div>
+              </div>
+            ) : allHistory.map((c: any) => (
+              <div key={c.id} style={{ padding: '0.85rem 1rem', background: '#F8FAFC', borderRadius: '9px', border: '1px solid var(--border)', borderLeft: '3px solid var(--primary)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: '#EFF6FF', color: '#2563EB', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 900, fontSize: '0.75rem' }}>
+                      {c.student.firstName[0]}
+                    </div>
+                    <div>
+                      <div style={{ fontWeight: 700, fontSize: '0.85rem' }}>{c.student.firstName} {c.student.lastName}</div>
+                      <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>{c.student.parentName || 'Veli'} · {c.student.parentPhone || '—'}</div>
+                    </div>
+                  </div>
+                  <div style={{ textAlign: 'right' }}>
+                    <div style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--primary)', background: '#EFF6FF', padding: '0.1rem 0.45rem', borderRadius: '10px' }}>{c.topic}</div>
+                    <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>{new Date(c.date).toLocaleDateString('tr-TR', { day: 'numeric', month: 'short', year: 'numeric' })}</div>
+                  </div>
+                </div>
+                <p style={{ fontSize: '0.78rem', color: '#374151', lineHeight: 1.55, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical' as const, margin: 0 }}>
+                  {c.message}
+                </p>
+                <div style={{ marginTop: '0.5rem', display: 'flex', justifyContent: 'flex-end' }}>
+                  <button onClick={() => { window.open(`https://wa.me/${(c.student.parentPhone||'').replace(/\D/g,'')}?text=${encodeURIComponent(c.message)}`, '_blank'); }}
+                    style={{ padding: '0.25rem 0.6rem', borderRadius: '5px', border: 'none', background: '#25D366', color: 'white', fontWeight: 700, fontSize: '0.68rem', cursor: 'pointer' }}>
+                    Tekrar Gönder
+                  </button>
+                </div>
               </div>
             ))}
           </div>
-        </section>
+        </div>
       </div>
-
-    </main>
+    </div>
   );
 }
