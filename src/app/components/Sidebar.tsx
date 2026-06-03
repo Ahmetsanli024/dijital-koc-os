@@ -158,13 +158,19 @@ function NavGroupItem({ group }: { group: NavGroup }) {
 }
 
 export default function Sidebar({ studentCount }: { studentCount: number }) {
+  const [collapsed, setCollapsed] = useState(false);
+
   return (
     <aside style={{
-      width: 'var(--sidebar-width)', flexShrink: 0,
+      width: collapsed ? '64px' : 'var(--sidebar-width)',
+      flexShrink: 0,
       background: 'var(--sidebar-bg)',
       display: 'flex', flexDirection: 'column',
       height: '100vh', position: 'sticky', top: 0,
-      overflowY: 'auto', zIndex: 40,
+      overflowY: collapsed ? 'hidden' : 'auto',
+      overflowX: 'hidden',
+      zIndex: 40,
+      transition: 'width 0.2s ease',
     }}>
       {/* Logo */}
       <div style={{
@@ -173,17 +179,28 @@ export default function Sidebar({ studentCount }: { studentCount: number }) {
         borderBottom: '1px solid rgba(255,255,255,0.06)',
         flexShrink: 0,
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-          <div style={{
-            width: '38px', height: '38px', borderRadius: '10px',
-            background: 'linear-gradient(135deg, #2563EB, #7C3AED)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            color: 'white', fontWeight: 900, fontSize: '1rem', flexShrink: 0,
-          }}>AŞ</div>
-          <div>
-            <div style={{ fontSize: '0.65rem', fontWeight: 700, color: '#60A5FA', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Koç Ajandası</div>
-            <div style={{ fontSize: '0.9rem', fontWeight: 800, color: 'white', lineHeight: 1.2 }}>Ahmet ŞANLI</div>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', overflow: 'hidden' }}>
+            <div style={{
+              width: '38px', height: '38px', borderRadius: '10px',
+              background: 'linear-gradient(135deg, #2563EB, #7C3AED)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              color: 'white', fontWeight: 900, fontSize: '1rem', flexShrink: 0,
+            }}>AŞ</div>
+            {!collapsed && (
+              <div style={{ overflow: 'hidden' }}>
+                <div style={{ fontSize: '0.65rem', fontWeight: 700, color: '#60A5FA', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Koç Ajandası</div>
+                <div style={{ fontSize: '0.9rem', fontWeight: 800, color: 'white', lineHeight: 1.2, whiteSpace: 'nowrap' }}>Ahmet ŞANLI</div>
+              </div>
+            )}
           </div>
+          <button
+            onClick={() => setCollapsed(c => !c)}
+            style={{ background: 'none', border: 'none', color: '#64748B', cursor: 'pointer', fontSize: '0.9rem', padding: '0.25rem', lineHeight: 1, flexShrink: 0 }}
+            title={collapsed ? 'Genişlet' : 'Daralt'}
+          >
+            {collapsed ? '›' : '‹'}
+          </button>
         </div>
         <div style={{
           marginTop: '0.85rem', padding: '0.4rem 0.75rem',
@@ -196,30 +213,52 @@ export default function Sidebar({ studentCount }: { studentCount: number }) {
       </div>
 
       {/* Dashboard link — tek başına */}
-      <div style={{ padding: '0.75rem 0.75rem 0.25rem' }}>
-        <DashboardLink />
-        <div style={{ height: '1px', background: 'rgba(255,255,255,0.06)', margin: '0.6rem 0' }} />
-        <div style={{ fontSize: '0.62rem', fontWeight: 700, color: 'var(--sidebar-group-text)', textTransform: 'uppercase', letterSpacing: '0.1em', padding: '0 0.5rem', marginBottom: '0.4rem' }}>Modüller</div>
-      </div>
+      {!collapsed && (
+        <div style={{ padding: '0.75rem 0.75rem 0.25rem' }}>
+          <DashboardLink />
+          <div style={{ height: '1px', background: 'rgba(255,255,255,0.06)', margin: '0.6rem 0' }} />
+          <div style={{ fontSize: '0.62rem', fontWeight: 700, color: 'var(--sidebar-group-text)', textTransform: 'uppercase', letterSpacing: '0.1em', padding: '0 0.5rem', marginBottom: '0.4rem' }}>Modüller</div>
+        </div>
+      )}
 
       {/* Nav Groups */}
-      <nav style={{ padding: '0 0.75rem', flex: 1, overflowY: 'auto' }}>
-        {NAV_GROUPS.map(g => <NavGroupItem key={g.id} group={g} />)}
-      </nav>
+      {!collapsed ? (
+        <nav style={{ padding: '0 0.75rem', flex: 1, overflowY: 'auto' }}>
+          {NAV_GROUPS.map(g => <NavGroupItem key={g.id} group={g} />)}
+        </nav>
+      ) : (
+        /* Collapsed: sadece ikonlar */
+        <nav style={{ padding: '0.5rem 0', flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.25rem' }}>
+          <DashboardIconLink />
+          {NAV_GROUPS.map(g => (
+            <Link key={g.id} href={g.items[0]?.href || '/'} title={g.label}
+              style={{ width: '40px', height: '40px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.1rem', textDecoration: 'none', color: 'var(--sidebar-text)' }}
+              onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = 'var(--sidebar-hover)'}
+              onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'none'}>
+              {g.icon}
+            </Link>
+          ))}
+        </nav>
+      )}
 
       {/* Alt bilgi */}
-      <div style={{
-        padding: '1rem 1.25rem', borderTop: '1px solid rgba(255,255,255,0.06)',
-        flexShrink: 0,
-      }}>
-        <Link href="/settings" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', textDecoration: 'none', color: 'var(--sidebar-text)', fontSize: '0.8rem', fontWeight: 600, padding: '0.4rem 0.5rem', borderRadius: '6px' }}>
-          <span>⚙️</span><span>Ayarlar</span>
+      <div style={{ padding: collapsed ? '0.75rem 0' : '1rem 1.25rem', borderTop: '1px solid rgba(255,255,255,0.06)', flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: collapsed ? 'center' : 'flex-start' }}>
+        <Link href="/settings" title="Ayarlar" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', textDecoration: 'none', color: 'var(--sidebar-text)', fontSize: '0.8rem', fontWeight: 600, padding: '0.4rem 0.5rem', borderRadius: '6px' }}>
+          <span>⚙️</span>{!collapsed && <span>Ayarlar</span>}
         </Link>
-        <div style={{ marginTop: '0.5rem', fontSize: '0.65rem', color: 'var(--sidebar-group-text)' }}>
-          v2.1 • Premium Lisans
-        </div>
+        {!collapsed && <div style={{ marginTop: '0.5rem', fontSize: '0.65rem', color: 'var(--sidebar-group-text)' }}>v2.1 • Premium Lisans</div>}
       </div>
     </aside>
+  );
+}
+
+function DashboardIconLink() {
+  const pathname = usePathname();
+  return (
+    <Link href="/" title="Kontrol Paneli"
+      style={{ width: '40px', height: '40px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.1rem', textDecoration: 'none', background: pathname === '/' ? 'var(--sidebar-active-bg)' : 'none' }}>
+      🏠
+    </Link>
   );
 }
 

@@ -2,6 +2,7 @@
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { addExam } from '../actions/exam';
+import PageHeader from '../components/PageHeader';
 
 const EXAM_TYPES = [
   { value: 'SINGLE', label: 'Tekli Deneme Sınavı', icon: '📝', desc: 'Tek bir LGS denemesinin ayrıntılı karnesi' },
@@ -172,15 +173,12 @@ export default function UploadExamClient({ students }: { students: any[] }) {
   };
 
   return (
-    <main style={{ maxWidth: '800px', margin: '0 auto', width: '100%' }}>
-      <header style={{ marginBottom: '2rem' }}>
-        <a href="/" style={{ color: 'var(--text-secondary)', textDecoration: 'none', fontSize: '0.9rem', marginBottom: '0.5rem', display: 'inline-block' }}>← Ana Sayfaya Dön</a>
-        <h1 style={{ fontSize: '2.2rem', fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.03em' }}>Sınav Yükleme Merkezi</h1>
-        <p style={{ color: 'var(--text-secondary)' }}>PDF sınav karnelerini sisteme yükleyin. Yapay zeka okunsun, siz kontrol edip öğrenciye atayın.</p>
-      </header>
+    <div style={{ maxWidth: '820px', width: '100%' }}>
+      <PageHeader title="Deneme Analizi (AI)" subtitle="PDF karne yükle — Yapay zeka konu bazlı analizi çıkarsın, siz onaylayıp öğrenciye atayın"
+        breadcrumb={['Ana Sayfa', 'Deneme Analizi']} />
 
       {errorMsg && (
-        <div style={{ padding: '1rem', background: 'rgba(239, 68, 68, 0.08)', border: '1px solid rgba(239, 68, 68, 0.25)', borderRadius: 'var(--radius-md)', marginBottom: '1.5rem', color: 'var(--danger)', fontWeight: 600, fontSize: '0.9rem' }}>
+        <div style={{ padding: '0.85rem 1rem', background: '#FEF2F2', border: '1px solid #FECACA', borderLeft: '4px solid #EF4444', borderRadius: '8px', marginBottom: '1.25rem', color: '#991B1B', fontWeight: 700, fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
           ⚠️ {errorMsg}
         </div>
       )}
@@ -333,6 +331,6 @@ export default function UploadExamClient({ students }: { students: any[] }) {
           </div>
         </form>
       )}
-    </main>
+    </div>
   );
 }
