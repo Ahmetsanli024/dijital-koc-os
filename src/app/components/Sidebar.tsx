@@ -22,6 +22,7 @@ const NAV_GROUPS: NavGroup[] = [
       { label: 'Öğrenci Listesi',           href: '/students'  },
       { label: 'Seans & Görüşme Kayıtları', href: '/sessions'  },
       { label: 'Veli İletişim Köprüsü',     href: '/parents'   },
+      { label: 'Şablon Kütüphanesi',        href: '/templates' },
     ],
   },
   {

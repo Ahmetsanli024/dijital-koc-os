@@ -4,6 +4,7 @@ import Link from 'next/link';
 import DashboardChartsClient from './DashboardChartsClient';
 import DashboardQuickActions from './components/DashboardQuickActions';
 import AiCommandCenter from './components/AiCommandCenter';
+import CoachTaskList, { AutoTask } from './components/CoachTaskList';
 
 export default async function Home() {
   const today = new Date();
@@ -36,6 +37,44 @@ export default async function Home() {
   const lgsDateStr = settings?.lgsExamDate || '2026-06-13';
   const lgsDate  = new Date(lgsDateStr + 'T00:00:00');
   const lgsDays  = Math.ceil((lgsDate.getTime() - today.getTime()) / 86_400_000);
+
+  // ── Otomatik Koç Görevleri ───────────────────────────────────
+  const autoTasks: AutoTask[] = [];
+
+  // Pasif öğrenciler (10+ gün seans yok)
+  students.forEach(s => {
+    if (!s.sessions.length) {
+      autoTasks.push({ id: `nosession-${s.id}`, type: 'urgent', text: `Henüz hiç seans yapılmadı: ${s.firstName} ${s.lastName}`, studentId: s.id, studentName: `${s.firstName} ${s.lastName}`, link: `/students/${s.id}` });
+    } else {
+      const days = Math.floor((today.getTime() - new Date(s.sessions[0].date).getTime()) / 86_400_000);
+      if (days > 10) autoTasks.push({ id: `passive-${s.id}`, type: 'urgent', text: `${days} gündür seans yok: ${s.firstName} ${s.lastName}`, studentId: s.id, link: `/sessions` });
+    }
+  });
+
+  // Veli iletişim gecikmesi
+  communicationAlerts.slice(0, 3).forEach(s => {
+    autoTasks.push({ id: `comm-${s.id}`, type: 'normal', text: `Veli iletişimi gecikiyor: ${s.firstName} ${s.lastName}`, studentId: s.id, link: `/parents` });
+  });
+
+  // Performans düşüşü
+  performanceAlerts.slice(0, 2).forEach(s => {
+    autoTasks.push({ id: `perf-${s.id}`, type: 'urgent', text: `Net düşüşü — program güncellemesi gerekli: ${s.firstName} ${s.lastName}`, studentId: s.id, link: `/students/${s.id}` });
+  });
+
+  // Psikoloji uyarısı
+  psychoAlerts.slice(0, 2).forEach(s => {
+    autoTasks.push({ id: `psych-${s.id}`, type: 'normal', text: `Motivasyon/kaygı desteği gerekiyor: ${s.firstName} ${s.lastName}`, studentId: s.id, link: `/students/${s.id}` });
+  });
+
+  // LGS yaklaşıyor
+  if (lgsDays <= 30 && lgsDays > 0) {
+    autoTasks.push({ id: 'lgs-sprint', type: 'info', text: `LGS'ye ${lgsDays} gün kaldı — son sprint planını hazırla`, link: '/assignments' });
+  }
+
+  // Bugün seans var
+  if (todayAppts.length > 0) {
+    autoTasks.push({ id: 'today-sessions', type: 'info', text: `Bugün ${todayAppts.length} seans planlandı — brifingleri hazırla`, link: '/takvim' });
+  }
 
   // ── Koçluk etkinlik metrikleri ───────────────────────────────
   // Ortalama net artışı (son 2 sınav olan öğrenciler)
@@ -203,6 +242,11 @@ export default async function Home() {
             <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>{s.sub}</div>
           </div>
         ))}
+      </div>
+
+      {/* ── KOÇ GÖREV LİSTESİ ──────────────────────────────────── */}
+      <div style={{ marginBottom: '1.25rem' }}>
+        <CoachTaskList autoTasks={autoTasks} />
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.4fr', gap: '1.25rem', marginBottom: '1.25rem' }}>
