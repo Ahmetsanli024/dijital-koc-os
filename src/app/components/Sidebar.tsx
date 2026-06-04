@@ -64,10 +64,12 @@ const NAV_GROUPS: NavGroup[] = [
   {
     id: 'reports',
     icon: '📈',
-    label: 'Gelişim Raporları',
+    label: 'Raporlar & Belgeler',
     defaultOpen: false,
     items: [
-      { label: 'Rapor Oluştur', href: '/reports' },
+      { label: 'Gelişim Raporları',   href: '/reports'   },
+      { label: 'Dönem Sonu Karne',    href: '/reports'   },
+      { label: 'Koçluk Sözleşmesi',  href: '/sozlesme'  },
     ],
   },
   {

@@ -5,6 +5,7 @@ import DashboardChartsClient from './DashboardChartsClient';
 import DashboardQuickActions from './components/DashboardQuickActions';
 import AiCommandCenter from './components/AiCommandCenter';
 import CoachTaskList, { AutoTask } from './components/CoachTaskList';
+import WeeklyInsight from './components/WeeklyInsight';
 
 export default async function Home() {
   const today = new Date();
@@ -243,6 +244,9 @@ export default async function Home() {
           </div>
         ))}
       </div>
+
+      {/* ── AI HAFTALIK İÇGÖRÜ ──────────────────────────────────── */}
+      <WeeklyInsight />
 
       {/* ── KOÇ GÖREV LİSTESİ ──────────────────────────────────── */}
       <div style={{ marginBottom: '1.25rem' }}>
