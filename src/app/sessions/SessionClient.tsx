@@ -39,7 +39,7 @@ export default function SessionClient({
 }) {
   const [sessions, setSessions] = useState<SessionNote[]>(initialSessions);
   const [isPending, startTransition] = useTransition();
-  const [activeView, setActiveView] = useState<'new' | 'list' | 'appt'>('list');
+  const [activeView, setActiveView] = useState<'new' | 'list' | 'appt' | 'meeting'>('list');
   const [filterStudent, setFilterStudent] = useState('');
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null);
@@ -163,17 +163,17 @@ export default function SessionClient({
           </p>
         </div>
         <div style={{ display: 'flex', gap: '0.75rem' }}>
-          <button
-            onClick={() => setActiveView(v => v === 'appt' ? 'list' : 'appt')}
-            className="btn-secondary"
-            style={{ padding: '0.65rem 1.2rem', fontWeight: 700, fontSize: '0.9rem', color: 'var(--primary)', borderColor: 'var(--primary)' }}>
-            📅 Randevu Ekle
+          <button onClick={() => setActiveView(v => v === 'appt' ? 'list' : 'appt')}
+            className="btn-secondary" style={{ padding: '0.65rem 1.2rem', fontWeight: 700, fontSize: '0.9rem', color: 'var(--primary)', borderColor: 'var(--primary)' }}>
+            📅 Randevu
           </button>
-          <button
-            onClick={() => setActiveView(v => v === 'new' ? 'list' : 'new')}
-            className="btn-primary"
-            style={{ padding: '0.65rem 1.2rem', fontWeight: 700, fontSize: '0.9rem' }}>
-            {activeView === 'new' ? '← Listeye Dön' : '+ Yeni Seans Notu'}
+          <button onClick={() => setActiveView(v => v === 'meeting' ? 'list' : 'meeting')}
+            className="btn-secondary" style={{ padding: '0.65rem 1.2rem', fontWeight: 700, fontSize: '0.9rem', color: '#D97706', borderColor: '#D97706' }}>
+            📋 Toplantı Tutanağı
+          </button>
+          <button onClick={() => setActiveView(v => v === 'new' ? 'list' : 'new')}
+            className="btn-primary" style={{ padding: '0.65rem 1.2rem', fontWeight: 700, fontSize: '0.9rem' }}>
+            {activeView === 'new' ? '← Geri' : '+ Seans Notu'}
           </button>
         </div>
       </header>
@@ -217,6 +217,9 @@ export default function SessionClient({
           </div>
         </div>
       )}
+
+      {/* ── TOPLANTI TUTANAĞI FORMU ──────────────────── */}
+      {activeView === 'meeting' && <MeetingNoteForm students={students} onClose={() => setActiveView('list')} showToast={showToast} />}
 
       {/* ── YENİ SEANS FORMU ──────────────────────────── */}
       {activeView === 'new' && (
@@ -406,5 +409,111 @@ export default function SessionClient({
         </>
       )}
     </main>
+  );
+}
+
+// ── Veli Toplantı Tutanağı Formu ────────────────────────────────────
+const MEETING_TOPICS = [
+  'Akademik Durum Değerlendirmesi', 'Sınav Sonuçları Analizi',
+  'Haftalık Program Güncellenmesi', 'Psikolojik Destek ve Motivasyon',
+  'Hedef Revizesi', 'Veli Gözlem Paylaşımı',
+  'LGS / YKS Stratejisi', 'Tercih Danışmanlığı',
+  'Evde Çalışma Düzeni', 'Diğer',
+];
+
+function MeetingNoteForm({ students, onClose, showToast }: { students: any[]; onClose: () => void; showToast: (m: string) => void }) {
+  const [isPending, start] = useTransition();
+  const [form, setForm] = useState({
+    studentId: '', participants: 'Koç + Veli',
+    selectedTopics: [] as string[], decisions: '', parentTasks: '', nextMeeting: '',
+  });
+
+  const toggleTopic = (t: string) => setForm(f => ({
+    ...f, selectedTopics: f.selectedTopics.includes(t) ? f.selectedTopics.filter(x => x !== t) : [...f.selectedTopics, t],
+  }));
+
+  const handleSave = () => {
+    if (!form.studentId || !form.selectedTopics.length) { showToast('Öğrenci ve en az bir konu seçin.'); return; }
+    start(async () => {
+      const res = await fetch('/api/meeting-notes', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ studentId: form.studentId, participants: form.participants, topics: form.selectedTopics, decisions: form.decisions, parentTasks: form.parentTasks, nextMeeting: form.nextMeeting || null }),
+      });
+      if (res.ok) { showToast('Toplantı tutanağı kaydedildi ✅'); onClose(); }
+      else showToast('Kayıt hatası');
+    });
+  };
+
+  const handlePrint = () => {
+    const student = students.find(s => s.id === form.studentId);
+    const w = window.open('', '_blank');
+    if (!w || !student) return;
+    w.document.write(`<html><head><style>
+      body{font-family:Arial,sans-serif;padding:40px;color:#111;font-size:13px}
+      h1{font-size:18px;border-bottom:2px solid #1E3A8A;padding-bottom:10px;margin-bottom:20px;color:#1E3A8A}
+      .section{margin-bottom:20px} .label{font-weight:700;font-size:12px;text-transform:uppercase;color:#666;margin-bottom:6px}
+      .value{border:1px solid #ddd;padding:10px;border-radius:6px;min-height:40px;font-size:13px}
+      .tag{display:inline-block;background:#EFF6FF;color:#2563EB;padding:3px 10px;border-radius:12px;margin:3px;font-size:12px;font-weight:700}
+      .footer{margin-top:40px;border-top:1px solid #ddd;padding-top:10px;font-size:11px;color:#999;display:flex;justify-content:space-between}
+    </style></head><body>
+    <h1>Veli Toplantı Tutanağı</h1>
+    <div class="section"><div class="label">Öğrenci</div><div class="value">${student.firstName} ${student.lastName} — ${student.grade}</div></div>
+    <div class="section"><div class="label">Tarih</div><div class="value">${new Date().toLocaleDateString('tr-TR',{weekday:'long',day:'numeric',month:'long',year:'numeric'})}</div></div>
+    <div class="section"><div class="label">Katılımcılar</div><div class="value">${form.participants}</div></div>
+    <div class="section"><div class="label">Görüşülen Konular</div><div class="value">${form.selectedTopics.map(t=>`<span class="tag">${t}</span>`).join('')}</div></div>
+    <div class="section"><div class="label">Alınan Kararlar</div><div class="value">${form.decisions||'—'}</div></div>
+    <div class="section"><div class="label">Veliye Verilen Görevler</div><div class="value">${form.parentTasks||'—'}</div></div>
+    ${form.nextMeeting?`<div class="section"><div class="label">Bir Sonraki Toplantı</div><div class="value">${new Date(form.nextMeeting).toLocaleDateString('tr-TR')}</div></div>`:''}
+    <div class="footer"><div>Ahmet ŞANLI — Eğitim Koçu</div><div>Toplantı tarihi: ${new Date().toLocaleDateString('tr-TR')}</div></div>
+    <script>window.onload=()=>window.print()</script></body></html>`);
+    w.document.close();
+  };
+
+  const iS: React.CSSProperties = { width:'100%', padding:'0.6rem 0.85rem', borderRadius:'8px', border:'1px solid var(--border)', fontSize:'0.88rem', outline:'none', background:'var(--bg-main)', fontFamily:'inherit' };
+
+  return (
+    <div className="card" style={{ marginBottom:'1.5rem', border:'1.5px solid #D97706', animation:'fadeIn 0.2s' }}>
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'1.25rem' }}>
+        <h2 style={{ fontSize:'1.05rem', fontWeight:800, color:'#D97706' }}>📋 Veli Toplantı Tutanağı</h2>
+        <button onClick={onClose} style={{ background:'none', border:'none', cursor:'pointer', color:'var(--text-muted)', fontSize:'1.1rem' }}>✕</button>
+      </div>
+      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'0.85rem', marginBottom:'0.85rem' }}>
+        <div><label style={{ display:'block', fontSize:'0.75rem', fontWeight:700, color:'var(--text-secondary)', marginBottom:'0.3rem' }}>Öğrenci *</label>
+          <select value={form.studentId} onChange={e=>setForm(f=>({...f,studentId:e.target.value}))} style={iS}>
+            <option value="">— Seçin —</option>
+            {students.map(s=><option key={s.id} value={s.id}>{s.firstName} {s.lastName}</option>)}
+          </select></div>
+        <div><label style={{ display:'block', fontSize:'0.75rem', fontWeight:700, color:'var(--text-secondary)', marginBottom:'0.3rem' }}>Katılımcılar</label>
+          <input value={form.participants} onChange={e=>setForm(f=>({...f,participants:e.target.value}))} style={iS} /></div>
+      </div>
+      <div style={{ marginBottom:'0.85rem' }}>
+        <label style={{ display:'block', fontSize:'0.75rem', fontWeight:700, color:'var(--text-secondary)', marginBottom:'0.4rem' }}>Görüşülen Konular * (birden fazla seçilebilir)</label>
+        <div style={{ display:'flex', flexWrap:'wrap', gap:'0.35rem' }}>
+          {MEETING_TOPICS.map(t=>(
+            <button key={t} onClick={()=>toggleTopic(t)}
+              style={{ padding:'0.3rem 0.65rem', borderRadius:'20px', border:'none', fontSize:'0.75rem', fontWeight:700, cursor:'pointer', background:form.selectedTopics.includes(t)?'#D97706':'var(--bg-main)', color:form.selectedTopics.includes(t)?'white':'var(--text-secondary)' }}>
+              {t}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'0.85rem', marginBottom:'0.85rem' }}>
+        <div><label style={{ display:'block', fontSize:'0.75rem', fontWeight:700, color:'var(--text-secondary)', marginBottom:'0.3rem' }}>Alınan Kararlar</label>
+          <textarea value={form.decisions} onChange={e=>setForm(f=>({...f,decisions:e.target.value}))} rows={3} style={{...iS,resize:'vertical'}} placeholder="Kararlar..." /></div>
+        <div><label style={{ display:'block', fontSize:'0.75rem', fontWeight:700, color:'var(--text-secondary)', marginBottom:'0.3rem' }}>Veliye Verilen Görevler</label>
+          <textarea value={form.parentTasks} onChange={e=>setForm(f=>({...f,parentTasks:e.target.value}))} rows={3} style={{...iS,resize:'vertical'}} placeholder="Görevler..." /></div>
+      </div>
+      <div style={{ marginBottom:'1rem' }}>
+        <label style={{ display:'block', fontSize:'0.75rem', fontWeight:700, color:'var(--text-secondary)', marginBottom:'0.3rem' }}>Bir Sonraki Toplantı</label>
+        <input type="date" value={form.nextMeeting} onChange={e=>setForm(f=>({...f,nextMeeting:e.target.value}))} style={{...iS,width:'200px'}} />
+      </div>
+      <div style={{ display:'flex', gap:'0.75rem', justifyContent:'flex-end' }}>
+        <button onClick={handlePrint} style={{ padding:'0.55rem 1.1rem', borderRadius:'7px', border:'1px solid var(--border)', background:'white', fontWeight:700, cursor:'pointer' }}>🖨️ Yazdır</button>
+        <button onClick={onClose} style={{ padding:'0.55rem 1.1rem', borderRadius:'7px', border:'1px solid var(--border)', background:'white', fontWeight:600, cursor:'pointer' }}>İptal</button>
+        <button onClick={handleSave} disabled={isPending} style={{ padding:'0.55rem 1.5rem', borderRadius:'7px', border:'none', background:'#D97706', color:'white', fontWeight:800, cursor:'pointer' }}>
+          {isPending?'Kaydediliyor...':'Tutanağı Kaydet'}
+        </button>
+      </div>
+    </div>
   );
 }

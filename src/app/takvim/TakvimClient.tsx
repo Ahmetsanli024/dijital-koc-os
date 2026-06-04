@@ -3,6 +3,7 @@ import { useState, useMemo, useTransition } from 'react';
 import PageHeader from '../components/PageHeader';
 import { createAppointment, completeAppointment, cancelAppointment, deleteAppointment } from '../actions/session';
 import { SeansBreefingModal } from '../components/SeansBreefing';
+import { SeansTimer } from '../components/SeansTimer';
 
 type Appt = { id: string; title: string; date: string; durationMin: number; status: string; student: { id: string; firstName: string; lastName: string; grade: string } };
 type Student = { id: string; firstName: string; lastName: string; grade: string };
@@ -21,7 +22,8 @@ export default function TakvimClient({ students, appointments: initAppts }: { st
   const [viewDate, setViewDate]   = useState(new Date());
   const [view, setView]           = useState<'month'|'list'>('month');
   const [showForm, setShowForm]   = useState(false);
-  const [briefAppt, setBriefAppt] = useState<Appt | null>(null);
+  const [briefAppt, setBriefAppt]   = useState<Appt | null>(null);
+  const [timerAppt, setTimerAppt]   = useState<Appt | null>(null);
   const [isPending, start]        = useTransition();
   const [toast, setToast]         = useState('');
   const [form, setForm]           = useState({ studentId: '', title: 'Koçluk Seansı', date: '', time: '10:00', durationMin: 45 });
@@ -79,6 +81,20 @@ export default function TakvimClient({ students, appointments: initAppts }: { st
   return (
     <div style={{ maxWidth: '1200px', width: '100%' }}>
       {toast && <div style={{ position: 'fixed', top: '1.5rem', right: '1.5rem', zIndex: 9999, padding: '0.65rem 1.25rem', borderRadius: '8px', background: '#10B981', color: 'white', fontWeight: 700 }}>{toast}</div>}
+
+      {/* Seans Zamanlayıcı Modalı */}
+      {timerAppt && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.6)', backdropFilter: 'blur(6px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }}>
+          <div style={{ position: 'relative' }}>
+            <button onClick={() => setTimerAppt(null)} style={{ position: 'absolute', top: '-12px', right: '-12px', width: '28px', height: '28px', borderRadius: '50%', border: 'none', background: '#EF4444', color: 'white', fontWeight: 900, cursor: 'pointer', zIndex: 1 }}>✕</button>
+            <SeansTimer
+              durationMin={timerAppt.durationMin}
+              studentName={`${timerAppt.student.firstName} ${timerAppt.student.lastName}`}
+              onComplete={() => setTimeout(() => setTimerAppt(null), 3000)}
+            />
+          </div>
+        </div>
+      )}
 
       {/* Seans Brifing Modalı */}
       {briefAppt && (
@@ -196,6 +212,7 @@ export default function TakvimClient({ students, appointments: initAppts }: { st
                   </div>
                   <div style={{ display: 'flex', gap: '0.3rem', marginTop: '0.45rem', flexWrap: 'wrap' }}>
                     <button onClick={() => setBriefAppt(a)} style={{ flex: 2, padding: '0.3rem', borderRadius: '5px', border: 'none', background: '#EFF6FF', color: '#2563EB', fontWeight: 700, fontSize: '0.65rem', cursor: 'pointer' }}>📋 Brifing</button>
+                    <button onClick={() => setTimerAppt(a)} style={{ flex: 2, padding: '0.3rem', borderRadius: '5px', border: 'none', background: '#F5F3FF', color: '#7C3AED', fontWeight: 700, fontSize: '0.65rem', cursor: 'pointer' }}>⏱ Zamanlayıcı</button>
                     <button onClick={() => handleStatus(a.id, 'complete')} style={{ flex: 1, padding: '0.25rem', borderRadius: '5px', border: 'none', background: '#F0FDF4', color: '#059669', fontWeight: 700, fontSize: '0.65rem', cursor: 'pointer' }}>✓</button>
                     <button onClick={() => handleStatus(a.id, 'cancel')} style={{ flex: 1, padding: '0.25rem', borderRadius: '5px', border: 'none', background: '#FEF2F2', color: '#DC2626', fontWeight: 700, fontSize: '0.65rem', cursor: 'pointer' }}>✕</button>
                     <button onClick={() => handleStatus(a.id, 'delete')} style={{ padding: '0.25rem 0.45rem', borderRadius: '5px', border: 'none', background: 'var(--bg-main)', color: 'var(--text-muted)', fontWeight: 700, fontSize: '0.65rem', cursor: 'pointer' }}>🗑</button>

@@ -38,8 +38,9 @@ model Student {
   psychoRecords PsychologicalRecord[]
   badges      Badge[]
   books       Book[]
-  payments    Payment[]
-  goals       StudentGoal[]
+  payments     Payment[]
+  goals        StudentGoal[]
+  meetingNotes MeetingNote[]
 }
 
 model PsychologicalRecord {
@@ -180,6 +181,18 @@ model Payment {
   status      String   @default("PENDING") // PENDING, PAID, OVERDUE
   note        String?
   student     Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+}
+
+model MeetingNote {
+  id           String   @id @default(cuid())
+  studentId    String
+  date         DateTime @default(now())
+  participants String   @default("Koç + Veli")
+  topics       String   // JSON array
+  decisions    String?
+  parentTasks  String?
+  nextMeeting  DateTime?
+  student      Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
 }
 
 model Lead {
