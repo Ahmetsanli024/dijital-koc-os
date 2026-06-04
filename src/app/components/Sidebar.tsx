@@ -91,6 +91,15 @@ const NAV_GROUPS: NavGroup[] = [
     ],
   },
   {
+    id: 'vitrin',
+    icon: '🏆',
+    label: 'Başarı Vitrini',
+    defaultOpen: false,
+    items: [
+      { label: 'Başarı Hikayeleri', href: '/vitrin' },
+    ],
+  },
+  {
     id: 'crm',
     icon: '📋',
     label: 'Aday & CRM',

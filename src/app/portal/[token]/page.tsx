@@ -12,6 +12,7 @@ export default async function PortalPage(props: { params: Promise<{ token: strin
       psychoRecords: { orderBy: { date: 'desc' }, take: 1 },
       sessions:      { orderBy: { date: 'desc' }, take: 1, select: { id: true, date: true, title: true } },
       appointments:  { where: { status: 'SCHEDULED', date: { gte: new Date() } }, orderBy: { date: 'asc' }, take: 1 },
+      checkIns:      { orderBy: { date: 'desc' }, take: 30, select: { id: true, date: true, mood: true, solvedCount: true, hardTopic: true, note: true } },
     }
   });
 
@@ -23,5 +24,9 @@ export default async function PortalPage(props: { params: Promise<{ token: strin
     );
   }
 
-  return <PortalClient student={student} />;
+  const serialized = {
+    ...student,
+    checkIns: student.checkIns?.map((c: any) => ({ ...c, date: c.date.toISOString() })) || [],
+  };
+  return <PortalClient student={serialized} />;
 }

@@ -11,13 +11,56 @@ const SUBJECT_COLORS: Record<string, string> = {
   'T.C. İNKILAP TARİHİ': '#D97706', 'İNGİLİZCE': '#DB2777', 'DİN KÜLTÜRÜ': '#7C3AED',
 };
 
+const MOOD_EMOJIS = ['', '😔', '😐', '😊', '😄'];
+const MOOD_LABELS = ['', 'Zor Gün', 'İdare Eder', 'İyi', 'Harika!'];
+const MOOD_COLORS = ['', '#EF4444', '#F59E0B', '#3B82F6', '#10B981'];
+
+// Streak hesapla (ardışık günler)
+function calcStreak(checkIns: any[]): number {
+  if (!checkIns.length) return 0;
+  let streak = 0;
+  const sorted = [...checkIns].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  let expected = new Date(today);
+  for (const ci of sorted) {
+    const d = new Date(ci.date); d.setHours(0, 0, 0, 0);
+    if (d.getTime() === expected.getTime()) { streak++; expected.setDate(expected.getDate() - 1); }
+    else if (d.getTime() < expected.getTime()) break;
+  }
+  return streak;
+}
+
 export default function PortalClient({ student }: { student: any }) {
-  const [activeTab, setActiveTab]   = useState<'home'|'tasks'|'exams'|'badges'>('home');
+  const [activeTab, setActiveTab]   = useState<'home'|'tasks'|'exams'|'badges'|'checkin'>('home');
   const [tasks, setTasks]           = useState(student.schedules?.[0]?.tasks || []);
   const [isPending, startTransition] = useTransition();
   const [toast, setToast]           = useState('');
+  const [checkIns, setCheckIns]     = useState<any[]>(student.checkIns || []);
+  const [checkInForm, setCheckInForm] = useState({ mood: 0, solvedCount: '', hardTopic: '', note: '' });
+  const [checkInDone, setCheckInDone] = useState(() => {
+    const today = new Date(); today.setHours(0,0,0,0);
+    return (student.checkIns || []).some((c: any) => new Date(c.date) >= today);
+  });
+  const streak = calcStreak(checkIns);
 
   const showToast = (m: string) => { setToast(m); setTimeout(() => setToast(''), 2500); };
+
+  const handleCheckIn = () => {
+    if (!checkInForm.mood) { showToast('Ruh halini seç! 😊'); return; }
+    startTransition(async () => {
+      const res = await fetch('/api/checkin', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ studentId: student.id, ...checkInForm, solvedCount: Number(checkInForm.solvedCount) || 0 }),
+      });
+      const data = await res.json();
+      if (data.checkIn) {
+        setCheckIns(prev => [{ ...data.checkIn }, ...prev.filter((c: any) => c.id !== data.checkIn.id)]);
+        setCheckInDone(true);
+        setActiveTab('home');
+        showToast('Check-in tamamlandı! 🎉');
+      }
+    });
+  };
 
   const schedule = student.schedules?.[0];
   const done     = tasks.filter((t: any) => t.isCompleted).length;
@@ -102,6 +145,28 @@ export default function PortalClient({ student }: { student: any }) {
             <div style={{ fontSize: '0.65rem', color: 'rgba(255,255,255,0.6)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>LGS'ye</div>
             <div style={{ fontSize: '2rem', fontWeight: 900, lineHeight: 1 }}>{lgsDays}</div>
             <div style={{ fontSize: '0.65rem', color: 'rgba(255,255,255,0.6)' }}>gün kaldı</div>
+          </div>
+        </div>
+
+        {/* Streak + Check-in */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '1rem', padding: '0.65rem 1rem', background: 'rgba(255,255,255,0.1)', borderRadius: '10px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <span style={{ fontSize: '1.2rem' }}>🔥</span>
+            <div>
+              <div style={{ fontWeight: 900, fontSize: '1.1rem', lineHeight: 1 }}>{streak} Gün</div>
+              <div style={{ fontSize: '0.62rem', color: 'rgba(255,255,255,0.65)' }}>Seri</div>
+            </div>
+          </div>
+          <button onClick={() => setActiveTab('checkin')}
+            style={{ padding: '0.45rem 1rem', borderRadius: '8px', border: 'none', background: checkInDone ? 'rgba(16,185,129,0.3)' : 'rgba(255,255,255,0.2)', color: 'white', fontWeight: 800, fontSize: '0.8rem', cursor: 'pointer' }}>
+            {checkInDone ? '✅ Bugün Yapıldı' : '📝 Günlük Kontrol'}
+          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+            <span style={{ fontSize: '1.1rem' }}>⭐</span>
+            <div>
+              <div style={{ fontWeight: 900, fontSize: '1.1rem', lineHeight: 1 }}>{(done * 10) + (checkIns.length * 5)}</div>
+              <div style={{ fontSize: '0.62rem', color: 'rgba(255,255,255,0.65)' }}>Puan</div>
+            </div>
           </div>
         </div>
 
@@ -304,6 +369,75 @@ export default function PortalClient({ student }: { student: any }) {
         )}
 
         {/* ── ROZETLER ────────────────────────────────────────── */}
+        {/* ── CHECK-IN SEKMESİ ──────────────────────────────────── */}
+        {activeTab === 'checkin' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+            <h2 style={{ fontSize: '1.1rem', fontWeight: 800 }}>
+              📝 Günlük Check-in {checkInDone && <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#10B981', background: '#F0FDF4', padding: '0.15rem 0.5rem', borderRadius: '10px', marginLeft: '0.5rem' }}>Bugün Yapıldı ✅</span>}
+            </h2>
+
+            {/* Ruh Hali */}
+            <div style={{ background: 'white', border: '1px solid #E2E8F0', borderRadius: '12px', padding: '1.1rem' }}>
+              <div style={{ fontWeight: 700, fontSize: '0.9rem', marginBottom: '0.75rem' }}>Bugün nasılsın?</div>
+              <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center' }}>
+                {[1,2,3,4].map(m => (
+                  <button key={m} onClick={() => setCheckInForm(f => ({ ...f, mood: m }))}
+                    style={{ flex: 1, padding: '0.75rem 0.5rem', borderRadius: '10px', border: `2px solid ${checkInForm.mood === m ? MOOD_COLORS[m] : '#E2E8F0'}`, background: checkInForm.mood === m ? MOOD_COLORS[m] + '18' : 'white', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.25rem' }}>
+                    <span style={{ fontSize: '1.75rem' }}>{MOOD_EMOJIS[m]}</span>
+                    <span style={{ fontSize: '0.65rem', fontWeight: 700, color: checkInForm.mood === m ? MOOD_COLORS[m] : '#94A3B8' }}>{MOOD_LABELS[m]}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Soru Sayısı */}
+            <div style={{ background: 'white', border: '1px solid #E2E8F0', borderRadius: '12px', padding: '1.1rem' }}>
+              <div style={{ fontWeight: 700, fontSize: '0.9rem', marginBottom: '0.6rem' }}>Bugün kaç soru çözdün?</div>
+              <input type="number" value={checkInForm.solvedCount} onChange={e => setCheckInForm(f => ({ ...f, solvedCount: e.target.value }))}
+                placeholder="0" min={0}
+                style={{ width: '100%', padding: '0.7rem 1rem', borderRadius: '9px', border: '1.5px solid #E2E8F0', fontSize: '1rem', fontWeight: 700, outline: 'none', textAlign: 'center' }} />
+            </div>
+
+            {/* Zorlu Konu */}
+            <div style={{ background: 'white', border: '1px solid #E2E8F0', borderRadius: '12px', padding: '1.1rem' }}>
+              <div style={{ fontWeight: 700, fontSize: '0.9rem', marginBottom: '0.6rem' }}>Zorlandığın konu var mı?</div>
+              <input value={checkInForm.hardTopic} onChange={e => setCheckInForm(f => ({ ...f, hardTopic: e.target.value }))}
+                placeholder="Örn: Çarpanlar ve Katlar (opsiyonel)"
+                style={{ width: '100%', padding: '0.7rem 1rem', borderRadius: '9px', border: '1.5px solid #E2E8F0', fontSize: '0.9rem', outline: 'none', fontFamily: 'inherit' }} />
+            </div>
+
+            {/* Not */}
+            <div style={{ background: 'white', border: '1px solid #E2E8F0', borderRadius: '12px', padding: '1.1rem' }}>
+              <div style={{ fontWeight: 700, fontSize: '0.9rem', marginBottom: '0.6rem' }}>Koçuna not (opsiyonel)</div>
+              <textarea value={checkInForm.note} onChange={e => setCheckInForm(f => ({ ...f, note: e.target.value }))} rows={2}
+                placeholder="Sormak istediğin bir şey var mı?"
+                style={{ width: '100%', padding: '0.7rem 1rem', borderRadius: '9px', border: '1.5px solid #E2E8F0', fontSize: '0.9rem', outline: 'none', resize: 'none', fontFamily: 'inherit' }} />
+            </div>
+
+            <button onClick={handleCheckIn} disabled={isPending || !checkInForm.mood}
+              style={{ padding: '0.9rem', borderRadius: '10px', border: 'none', background: checkInForm.mood ? '#2563EB' : '#CBD5E1', color: 'white', fontWeight: 800, fontSize: '1rem', cursor: checkInForm.mood ? 'pointer' : 'not-allowed' }}>
+              {isPending ? '⏳ Kaydediliyor...' : checkInDone ? '🔄 Güncelle' : '✅ Check-in Tamamla'}
+            </button>
+
+            {/* Son check-in'ler */}
+            {checkIns.length > 0 && (
+              <div>
+                <div style={{ fontWeight: 800, fontSize: '0.9rem', marginBottom: '0.5rem' }}>Son Check-in'ler</div>
+                {checkIns.slice(0, 5).map((ci: any) => (
+                  <div key={ci.id} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.6rem 0.85rem', background: 'white', borderRadius: '9px', border: '1px solid #E2E8F0', marginBottom: '0.35rem' }}>
+                    <span style={{ fontSize: '1.4rem' }}>{MOOD_EMOJIS[ci.mood]}</span>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontWeight: 700, fontSize: '0.82rem' }}>{new Date(ci.date).toLocaleDateString('tr-TR', { weekday: 'short', day: 'numeric', month: 'short' })}</div>
+                      <div style={{ fontSize: '0.72rem', color: '#94A3B8' }}>{ci.solvedCount > 0 && `${ci.solvedCount} soru · `}{ci.hardTopic || ''}</div>
+                    </div>
+                    <span style={{ fontSize: '0.75rem', fontWeight: 800, color: MOOD_COLORS[ci.mood] }}>{MOOD_LABELS[ci.mood]}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
         {activeTab === 'badges' && (
           <div>
             <h2 style={{ fontSize: '1.1rem', fontWeight: 800, marginBottom: '1rem' }}>🏆 Başarı Rozetlerin</h2>
@@ -331,10 +465,11 @@ export default function PortalClient({ student }: { student: any }) {
       {/* ── ALT NAVİGASYON (Mobil) ──────────────────────────── */}
       <nav style={{ position: 'fixed', bottom: 0, left: 0, right: 0, background: 'white', borderTop: '1px solid #E2E8F0', display: 'flex', zIndex: 100, boxShadow: '0 -4px 20px rgba(0,0,0,0.06)' }}>
         {([
-          { tab: 'home',   icon: '🏠', label: 'Ana Panel' },
-          { tab: 'tasks',  icon: '📋', label: 'Görevler',  badge: total - done > 0 ? total - done : null },
-          { tab: 'exams',  icon: '📊', label: 'Sınavlar' },
-          { tab: 'badges', icon: '🏆', label: 'Rozetler',  badge: student.badges?.length || null },
+          { tab: 'home',    icon: '🏠', label: 'Ana Panel' },
+          { tab: 'tasks',   icon: '📋', label: 'Görevler',  badge: total - done > 0 ? total - done : null },
+          { tab: 'checkin', icon: '📝', label: 'Check-in',  badge: !checkInDone ? '!' : null },
+          { tab: 'exams',   icon: '📊', label: 'Sınavlar' },
+          { tab: 'badges',  icon: '🏆', label: 'Rozetler',  badge: student.badges?.length || null },
         ] as const).map(btn => (
           <button key={btn.tab} onClick={() => setActiveTab(btn.tab)}
             style={{ flex: 1, padding: '0.75rem 0.5rem 0.6rem', border: 'none', background: 'white', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.2rem', position: 'relative' }}>
