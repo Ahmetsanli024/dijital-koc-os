@@ -57,7 +57,20 @@ export async function deleteStudent(id: string) {
   revalidatePath('/')
 }
 
-export async function updateStudent(id: string, formData: FormData) {
+// Direkt obje ile güncelleme (öğrenme stili vb. için)
+export async function updateStudentField(id: string, data: Record<string, any>) {
+  try {
+    await prisma.student.update({ where: { id }, data });
+    revalidatePath('/students/' + id);
+    return { success: true };
+  } catch (e: any) { return { success: false, error: e.message }; }
+}
+
+export async function updateStudent(id: string, formData: FormData | Record<string, any>) {
+  // Eğer plain object geldiyse (learningStyle gibi) direkt güncelle
+  if (!(formData instanceof FormData)) {
+    return updateStudentField(id, formData);
+  }
   const firstName = formData.get('firstName') as string
   const lastName = formData.get('lastName') as string
   const grade = formData.get('grade') as string

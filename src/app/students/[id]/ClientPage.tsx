@@ -10,6 +10,10 @@ import { calculateLgsPercentile, getImprovementOpportunities } from '@/lib/lgsCa
 import { updateStudent } from '../../actions/student';
 import { deleteExam } from '../../actions/exam';
 import { generatePortalToken, addBadge, deleteBadge } from '../../actions/psycho';
+import OnboardingChecklist from '../../components/OnboardingChecklist';
+import GoalTracker from '../../components/GoalTracker';
+import LearningStyleProfile from '../../components/LearningStyleProfile';
+import HabitHeatmap from '../../components/HabitHeatmap';
 
 export default function ClientPage({ initialStudent }: { initialStudent: any }) {
   const router = useRouter();
@@ -876,6 +880,7 @@ export default function ClientPage({ initialStudent }: { initialStudent: any }) 
       <div style={{ background: 'white', border: '1px solid var(--border)', borderRadius: '10px', marginBottom: '1.25rem', display: 'flex', overflow: 'hidden' }}>
         {[
           { id: 'genel',    label: 'Genel Bakış',    icon: '🏠', count: null },
+          { id: 'gelisim',  label: 'Gelişim Profili', icon: '🎯', count: null },
           { id: 'karneler', label: 'Sınav Karneleri', icon: '📊', count: exams.length },
           { id: 'konular',  label: 'Konu Analizi',    icon: '📚', count: exams.length > 0 ? 1 : 0 },
           { id: 'programlar',label: 'Çalışma Programı',icon: '📅', count: initialStudent.schedules?.length || 0 },
@@ -1019,6 +1024,51 @@ export default function ClientPage({ initialStudent }: { initialStudent: any }) 
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {/* ── GELİŞİM PROFİLİ SEKMESİ ─────────────────────────────── */}
+      {activeTab === 'gelisim' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', animation: 'fadeIn 0.3s' }}>
+
+          {/* Onboarding Kontrol Listesi */}
+          <OnboardingChecklist student={{
+            firstName:    initialStudent.firstName,
+            lastName:     initialStudent.lastName,
+            grade:        initialStudent.grade,
+            target:       initialStudent.target,
+            targetSchool: initialStudent.targetSchool,
+            parentName:   initialStudent.parentName,
+            parentPhone:  initialStudent.parentPhone,
+            portalToken:  initialStudent.portalToken,
+            exams:        exams,
+            schedules:    initialStudent.schedules || [],
+            sessions:     initialStudent.sessions  || [],
+            appointments: initialStudent.appointments || [],
+          }} />
+
+          {/* Hedef Takibi */}
+          <GoalTracker
+            studentId={initialStudent.id}
+            initialGoals={(initialStudent.goals || []).map((g: any) => ({
+              id: g.id, title: g.title, targetValue: g.targetValue,
+              currentValue: g.currentValue, unit: g.unit,
+              deadline: g.deadline, achieved: g.achieved,
+            }))}
+          />
+
+          {/* Öğrenme Stili Profili */}
+          <LearningStyleProfile studentId={initialStudent.id} existingStyle={initialStudent.learningStyle} />
+
+          {/* Çalışma Alışkanlığı Isı Haritası */}
+          <HabitHeatmap schedules={(initialStudent.schedules || []).map((sc: any) => ({
+            startDate: sc.startDate,
+            tasks: (sc.tasks || []).map((t: any) => ({
+              day: t.day, isCompleted: t.isCompleted,
+              questionCount: t.questionCount || 0, solvedQuestions: t.solvedQuestions || 0,
+            })),
+          }))} />
+
         </div>
       )}
 
