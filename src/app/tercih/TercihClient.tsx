@@ -1,6 +1,6 @@
 'use client';
 import { useState, useMemo } from 'react';
-import { HIGH_SCHOOLS, calculateWinProbability } from '@/lib/lgsCalculator';
+import { HIGH_SCHOOLS, calculateWinProbability, calculateLgsPercentile, netToScore, SCHOOL_TYPES, CITIES } from '@/lib/lgsCalculator';
 import PageHeader from '../components/PageHeader';
 import Link from 'next/link';
 
@@ -23,8 +23,23 @@ export default function TercihClient({ students }: { students: Student[] }) {
   const [tercihList, setTercihList]               = useState<TercihItem[]>([]);
   const [showOnlyAdded, setShowOnlyAdded]         = useState(false);
   const [saveMsg, setSaveMsg]                     = useState('');
+  const [activeTab, setActiveTab]                 = useState<'tercih' | 'simulator'>('tercih');
+  // Simülatör state
+  const [simNet, setSimNet]         = useState<number | ''>('');
+  const [simCity, setSimCity]       = useState('');
+  const [simType, setSimType]       = useState('');
 
   const selectedStudent = students.find(s => s.id === selectedStudentId);
+
+  // Simülatör hesaplama
+  const simScore = simNet !== '' ? netToScore(Number(simNet)) : null;
+  const simSchools = useMemo(() => {
+    if (!simScore) return [];
+    return HIGH_SCHOOLS
+      .filter(s => (!simCity || s.city === simCity) && (!simType || s.type === simType))
+      .map(s => ({ ...s, probability: calculateWinProbability(simScore, s.baseScore) }))
+      .sort((a, b) => b.probability - a.probability);
+  }, [simScore, simCity, simType]);
 
   // Tahmini puan: manual > son 3 sınavın ortalaması
   const estimatedScore = useMemo(() => {
@@ -129,14 +144,119 @@ export default function TercihClient({ students }: { students: Student[] }) {
       )}
 
       <PageHeader
-        title="Tercih Danışmanlığı"
-        subtitle="LGS sonrası okul eşleştirme, tercih listesi oluşturma ve risk analizi"
+        title="Tercih & LGS Danışmanlığı"
+        subtitle="Gerçek 2024 taban puanlarıyla okul eşleştirme, tercih listesi ve kazanma ihtimali"
         breadcrumb={['Ana Sayfa', 'Tercih Danışmanlığı']}
         actions={[
           { label: '🖨️ Rapor Yazdır', variant: 'secondary', onClick: handlePrint },
           { label: '💾 Listeyi Kaydet', variant: 'primary', onClick: handleSave },
         ]}
       />
+
+      {/* Tab Navigasyonu */}
+      <div style={{ display: 'flex', gap: '0', background: 'white', border: '1px solid var(--border)', borderRadius: '10px', overflow: 'hidden', marginBottom: '1.25rem' }}>
+        {[
+          { id: 'tercih',    icon: '📋', label: 'Tercih Listesi Oluştur' },
+          { id: 'simulator', icon: '🏫', label: 'LGS Okul Tahmin Motoru' },
+        ].map((tab, i) => (
+          <button key={tab.id} onClick={() => setActiveTab(tab.id as any)}
+            style={{ flex: 1, padding: '0.85rem', border: 'none', borderRight: i === 0 ? '1px solid var(--border)' : 'none', background: activeTab === tab.id ? '#EFF6FF' : 'white', color: activeTab === tab.id ? 'var(--primary)' : 'var(--text-secondary)', fontWeight: activeTab === tab.id ? 800 : 600, fontSize: '0.9rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', borderBottom: activeTab === tab.id ? '3px solid var(--primary)' : '3px solid transparent' }}>
+            <span>{tab.icon}</span>{tab.label}
+          </button>
+        ))}
+      </div>
+
+      {/* ── SİMÜLATÖR SEKMESİ ────────────────────────────────────── */}
+      {activeTab === 'simulator' && (
+        <div>
+          <div style={{ background: 'white', border: '1px solid var(--border)', borderRadius: '12px', padding: '1.5rem', marginBottom: '1.25rem' }}>
+            <div style={{ fontWeight: 800, marginBottom: '1rem', fontSize: '0.9rem' }}>Net Girişi & Filtreler</div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '0.35rem' }}>Tahmini Net (0–90)</label>
+                <input type="number" value={simNet} onChange={e => setSimNet(e.target.value ? Number(e.target.value) : '')} min={0} max={90} placeholder="Örn: 72"
+                  style={{ width: '100%', padding: '0.65rem 0.9rem', borderRadius: '8px', border: '1px solid var(--border)', fontSize: '0.88rem', outline: 'none', background: 'var(--bg-main)' }} />
+                {simScore && <div style={{ marginTop: '0.3rem', fontSize: '0.75rem', color: 'var(--primary)', fontWeight: 700 }}>≈ {simScore} puan · %{calculateLgsPercentile(simScore)} dilim</div>}
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '0.35rem' }}>Şehir</label>
+                <select value={simCity} onChange={e => setSimCity(e.target.value)} style={{ width: '100%', padding: '0.65rem 0.9rem', borderRadius: '8px', border: '1px solid var(--border)', fontSize: '0.88rem', outline: 'none', background: 'var(--bg-main)' }}>
+                  <option value="">Tüm Şehirler</option>
+                  {CITIES.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '0.35rem' }}>Okul Türü</label>
+                <select value={simType} onChange={e => setSimType(e.target.value)} style={{ width: '100%', padding: '0.65rem 0.9rem', borderRadius: '8px', border: '1px solid var(--border)', fontSize: '0.88rem', outline: 'none', background: 'var(--bg-main)' }}>
+                  <option value="">Tüm Türler</option>
+                  {Object.entries(SCHOOL_TYPES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                </select>
+              </div>
+            </div>
+          </div>
+
+          {simScore ? (
+            <div style={{ background: 'white', border: '1px solid var(--border)', borderRadius: '12px', overflow: 'hidden' }}>
+              <div style={{ padding: '0.85rem 1.25rem', background: '#F8FAFC', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontWeight: 800, fontSize: '0.9rem' }}>Eşleşen Okullar ({simSchools.length})</span>
+                <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Taban puanları: 2024 LGS gerçek verileri</span>
+              </div>
+              <div style={{ maxHeight: '520px', overflowY: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                  <thead style={{ position: 'sticky', top: 0 }}>
+                    <tr style={{ background: '#F8FAFC' }}>
+                      {['Okul', 'Tür', 'Şehir', '2024 Taban', 'Yüzdelik', 'Kazanma İhtimali'].map(h => (
+                        <th key={h} style={{ padding: '0.6rem 0.9rem', textAlign: 'left', fontSize: '0.68rem', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', borderBottom: '1px solid var(--border)', whiteSpace: 'nowrap' }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {simSchools.map((s, i) => {
+                      const p = s.probability;
+                      const pColor = p >= 70 ? '#10B981' : p >= 40 ? '#F59E0B' : '#EF4444';
+                      const pLabel = p >= 70 ? 'Yüksek' : p >= 40 ? 'Orta' : 'Düşük';
+                      return (
+                        <tr key={s.name} style={{ borderBottom: '1px solid var(--border)', background: i % 2 === 0 ? 'white' : '#FAFAFA' }}>
+                          <td style={{ padding: '0.7rem 0.9rem', fontWeight: 700, fontSize: '0.88rem' }}>{s.name}</td>
+                          <td style={{ padding: '0.7rem 0.9rem' }}>
+                            <span style={{ padding: '0.15rem 0.5rem', borderRadius: '10px', fontSize: '0.68rem', fontWeight: 700, background: s.type === 'fen' ? '#EFF6FF' : '#F0FDF4', color: s.type === 'fen' ? '#2563EB' : '#059669' }}>
+                              {SCHOOL_TYPES[s.type]}
+                            </span>
+                          </td>
+                          <td style={{ padding: '0.7rem 0.9rem', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{s.city}</td>
+                          <td style={{ padding: '0.7rem 0.9rem', fontWeight: 800, color: '#1E3A8A' }}>{s.baseScore.toFixed(2)}</td>
+                          <td style={{ padding: '0.7rem 0.9rem', fontSize: '0.8rem', color: 'var(--text-muted)' }}>%{s.basePercentile.toFixed(2)}</td>
+                          <td style={{ padding: '0.7rem 0.9rem' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                              <div style={{ width: '60px', height: '6px', background: '#E2E8F0', borderRadius: '3px', overflow: 'hidden' }}>
+                                <div style={{ height: '100%', width: `${p}%`, background: pColor, borderRadius: '3px' }} />
+                              </div>
+                              <span style={{ fontWeight: 800, fontSize: '0.85rem', color: pColor }}>{p}%</span>
+                              <span style={{ fontSize: '0.7rem', color: pColor, fontWeight: 600 }}>{pLabel}</span>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              <div style={{ padding: '0.65rem 1.25rem', background: '#F8FAFC', borderTop: '1px solid var(--border)', fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                💡 Taban puanları 2024 LGS yerleştirme sonuçlarına dayanmaktadır. 2025 yılında farklılık gösterebilir.
+              </div>
+            </div>
+          ) : (
+            <div style={{ background: 'white', border: '1px solid var(--border)', borderRadius: '12px', padding: '4rem', textAlign: 'center', color: 'var(--text-muted)' }}>
+              <div style={{ fontSize: '2.5rem', marginBottom: '0.75rem' }}>🏫</div>
+              <p style={{ fontWeight: 600 }}>Net değeri girin, eşleşen okullar listelensin</p>
+              <p style={{ fontSize: '0.82rem', marginTop: '0.35rem' }}>Şehir ve okul türüne göre filtreleme yapabilirsiniz</p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {activeTab === 'tercih' && (
+      <div>
 
       {/* Giriş Parametreleri */}
       <div style={{ background: 'white', border: '1px solid var(--border)', borderRadius: '12px', padding: '1.5rem', marginBottom: '1.25rem' }}>
@@ -341,10 +461,12 @@ export default function TercihClient({ students }: { students: Student[] }) {
           <h3 style={{ fontWeight: 800, fontSize: '1.1rem', marginBottom: '0.5rem' }}>Öğrenci ve Puan Seçin</h3>
           <p style={{ color: 'var(--text-secondary)', fontSize: '0.88rem' }}>
             Üstteki formdan bir öğrenci seçin veya tahmini puan girin.<br />
-            Sistem otomatik olarak puana uygun liseleri ve kazanma ihtimallerini gösterir.
+            Sistem 2024 gerçek taban puanlarıyla puana uygun liseleri ve kazanma ihtimallerini gösterir.
           </p>
         </div>
       )}
+      </div>
+      )}{/* tercih tab sonu */}
     </div>
   );
 }

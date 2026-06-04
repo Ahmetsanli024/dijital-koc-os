@@ -55,10 +55,11 @@ const NAV_GROUPS: NavGroup[] = [
   {
     id: 'tercih',
     icon: '🎯',
-    label: 'Tercih Danışmanlığı',
+    label: 'Tercih & LGS',
     defaultOpen: false,
     items: [
-      { label: 'Okul Eşleştirme & Tercih', href: '/tercih' },
+      { label: 'Tercih Listesi Oluştur', href: '/tercih' },
+      { label: 'LGS Okul Tahmin Motoru', href: '/tercih' },
     ],
   },
   {
@@ -78,7 +79,7 @@ const NAV_GROUPS: NavGroup[] = [
     label: 'Yapay Zeka Araçları',
     defaultOpen: false,
     items: [
-      { label: 'LGS Okul Tahmin Motoru', href: '/lgs-simulator' },
+      { label: 'AI Komuta Merkezi', href: '/' },
     ],
   },
   {
