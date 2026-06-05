@@ -60,7 +60,7 @@ export async function POST(req: Request) {
     const topicList = Object.entries(topicsMap as Record<string, string[]>)
       .map(([s, ts]) => `${s}: [${ts.join(', ')}]`).join('\n');
 
-    const prompt = `Sen LGS hazırlık sürecinde çalışan bir Türk eğitim koçusun. Öğrencinin haftalık ders programını aşağıdaki kurallara göre oluştur.
+    const prompt = `Sen LGS hazırlık sürecinde çalışan bir Türk rehber öğretmensun. Öğrencinin haftalık ders programını aşağıdaki kurallara göre oluştur.
 
 ━━━ MEVCUT DERSLER ━━━
 TÜRKÇE, MATEMATİK, FEN BİLİMLERİ, T.C. İNKILAP TARİHİ, İNGİLİZCE, DİN KÜLTÜRÜ, PARAGRAF

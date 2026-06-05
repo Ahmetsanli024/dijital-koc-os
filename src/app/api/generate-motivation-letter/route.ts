@@ -11,7 +11,7 @@ export async function POST(req: Request) {
     const { studentName, grade, weakTopics, totalTasks, latestPsychoNote } = body;
 
     const prompt = `
-      Sen uzman bir Psikolojik Danışman ve Kariyer/Eğitim Koçusun. Kurumsal ve prestijli bir eğitim kurumunda çalışıyorsun.
+      Sen uzman bir Psikolojik Danışman ve Kariyer/Rehber Öğretmensun. Kurumsal ve prestijli bir eğitim kurumunda çalışıyorsun.
       Senden ${studentName} (${grade}) adlı öğrenci için haftalık çalışma programının sonuna eklenecek, tek sayfalık motivasyon ve yönlendirme mektubu yazmanı istiyorum.
       
       Öğrencinin Durumu:

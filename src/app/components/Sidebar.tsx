@@ -68,9 +68,9 @@ const NAV_GROUPS: NavGroup[] = [
     label: 'Raporlar & Belgeler',
     defaultOpen: false,
     items: [
-      { label: 'Gelişim Raporları',   href: '/reports'   },
-      { label: 'Dönem Sonu Karne',    href: '/reports'   },
-      { label: 'Koçluk Sözleşmesi',  href: '/sozlesme'  },
+      { label: 'Gelişim Raporları',   href: '/reports'          },
+      { label: 'Dönem Sonu Karne',    href: '/reports?tab=karne' },
+      { label: 'Koçluk Sözleşmesi',  href: '/sozlesme'          },
     ],
   },
   {
@@ -170,7 +170,7 @@ function NavGroupItem({ group }: { group: NavGroup }) {
   );
 }
 
-export default function Sidebar({ studentCount, coachName = 'Koç', coachTitle = 'Eğitim Koçu', initials = 'K' }: { studentCount: number; coachName?: string; coachTitle?: string; initials?: string }) {
+export default function Sidebar({ studentCount, coachName = 'Koç', coachTitle = 'Rehber Öğretmen', initials = 'K' }: { studentCount: number; coachName?: string; coachTitle?: string; initials?: string }) {
   const [collapsed, setCollapsed] = useState(false);
 
   return (

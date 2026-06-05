@@ -1,5 +1,6 @@
 'use client';
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
+import { useSearchParams } from 'next/navigation';
 import PageHeader from '../components/PageHeader';
 
 type Student = {
@@ -9,9 +10,15 @@ type Student = {
 };
 
 export default function ReportsClient({ students }: { students: Student[] }) {
+  const searchParams = useSearchParams();
+  const [activeTab, setActiveTab]   = useState<'rapor'|'karne'>(searchParams.get('tab') === 'karne' ? 'karne' : 'rapor');
   const [selectedId, setSelectedId] = useState('');
   const [period, setPeriod]         = useState('monthly');
   const [isGenerating, setGenerating]= useState(false);
+
+  useEffect(() => {
+    if (searchParams.get('tab') === 'karne') setActiveTab('karne');
+  }, [searchParams]);
 
   const student = students.find(s => s.id === selectedId);
 
@@ -114,7 +121,7 @@ export default function ReportsClient({ students }: { students: Student[] }) {
     </style></head><body>
     <div class="karne-header">
       <div><div class="karne-title">Dönem Sonu Karne</div><div class="karne-sub">Koçluk Süreci Değerlendirme Raporu</div></div>
-      <div class="karne-logo">Ahmet ŞANLI<br>Eğitim Koçu<br>${new Date().toLocaleDateString('tr-TR')}</div>
+      <div class="karne-logo">Ahmet ŞANLI<br>Rehber Öğretmen<br>${new Date().toLocaleDateString('tr-TR')}</div>
     </div>
     <div class="student-bar">
       <div><strong>${s.firstName} ${s.lastName}</strong>Sınıf: ${s.grade}</div>
@@ -180,7 +187,7 @@ export default function ReportsClient({ students }: { students: Student[] }) {
     <div class="signature-section">
       <div class="sig-box"><div class="sig-line"></div><div class="sig-name">${s.firstName} ${s.lastName}</div><div class="sig-title">Öğrenci</div></div>
       <div class="sig-box"><div class="sig-line"></div><div class="sig-name">${s.parentName || 'Veli'}</div><div class="sig-title">Veli</div></div>
-      <div class="sig-box"><div class="sig-line"></div><div class="sig-name">Ahmet ŞANLI</div><div class="sig-title">Eğitim Koçu</div></div>
+      <div class="sig-box"><div class="sig-line"></div><div class="sig-name">Ahmet ŞANLI</div><div class="sig-title">Rehber Öğretmen</div></div>
     </div>
     <script>window.onload=()=>window.print()</script>
     </body></html>`;
@@ -228,7 +235,7 @@ export default function ReportsClient({ students }: { students: Student[] }) {
         </div>
         <div class="logo">
           <strong>Ahmet ŞANLI</strong>
-          Eğitim Koçu &amp; Danışmanı
+          Rehber Öğretmen &amp; Danışmanı
         </div>
       </div>
 
@@ -291,7 +298,7 @@ export default function ReportsClient({ students }: { students: Student[] }) {
 
       <div class="footer">
         <div>Bu rapor ${new Date().toLocaleDateString('tr-TR')} tarihinde koçluk danışmanlığı kapsamında hazırlanmıştır.</div>
-        <div>Ahmet ŞANLI — Eğitim Koçu &amp; Danışmanı</div>
+        <div>Ahmet ŞANLI — Rehber Öğretmen &amp; Danışmanı</div>
       </div>
       <script>window.onload=()=>{window.print();}</script>
     </body></html>`;
@@ -305,14 +312,25 @@ export default function ReportsClient({ students }: { students: Student[] }) {
   return (
     <div style={{ maxWidth: '1100px', width: '100%' }}>
       <PageHeader
-        title="Gelişim Raporları"
-        subtitle="Öğrenci bazlı dönemsel gelişim raporu oluşturun ve veliye gönderin"
-        breadcrumb={['Ana Sayfa', 'Gelişim Raporları']}
-        actions={[
-          { label: '📋 Dönem Sonu Karne', variant: 'secondary', onClick: handleTermKarne },
-          { label: isGenerating ? '⏳...' : '🖨️ Aylık Rapor', variant: 'primary', onClick: handlePrint },
-        ]}
-      />
+        title={activeTab === 'karne' ? 'Dönem Sonu Karne' : 'Gelişim Raporları'}
+        subtitle={activeTab === 'karne' ? 'Kapsamlı dönem değerlendirmesi — imzalı PDF' : 'Öğrenci bazlı dönemsel gelişim raporu'}
+        breadcrumb={['Ana Sayfa', 'Raporlar & Belgeler', activeTab === 'karne' ? 'Dönem Sonu Karne' : 'Gelişim Raporları']} />
+
+      {/* Tab seçici */}
+      <div style={{ display: 'flex', background: 'white', border: '1px solid var(--border)', borderRadius: '10px', overflow: 'hidden', marginBottom: '1.25rem' }}>
+        {[{ id: 'rapor', label: '📊 Gelişim Raporu' }, { id: 'karne', label: '📋 Dönem Sonu Karne' }].map((t, i) => (
+          <button key={t.id} onClick={() => setActiveTab(t.id as any)}
+            style={{ flex: 1, padding: '0.8rem', border: 'none', borderRight: i === 0 ? '1px solid var(--border)' : 'none', background: activeTab === t.id ? '#EFF6FF' : 'white', color: activeTab === t.id ? 'var(--primary)' : 'var(--text-secondary)', fontWeight: activeTab === t.id ? 800 : 600, fontSize: '0.88rem', cursor: 'pointer', borderBottom: activeTab === t.id ? '3px solid var(--primary)' : '3px solid transparent' }}>
+            {t.label}
+          </button>
+        ))}
+      </div>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '1.25rem' }}>
+        <button onClick={activeTab === 'karne' ? handleTermKarne : handlePrint}
+          style={{ padding: '0.6rem 1.5rem', borderRadius: '8px', border: 'none', background: 'var(--primary)', color: 'white', fontWeight: 700, cursor: 'pointer' }}>
+          {activeTab === 'karne' ? '🖨️ Dönem Sonu Karne PDF' : '🖨️ Gelişim Raporu PDF'}
+        </button>
+      </div>
 
       {/* Parametreler */}
       <div style={{ background: 'white', border: '1px solid var(--border)', borderRadius: '12px', padding: '1.5rem', marginBottom: '1.25rem' }}>

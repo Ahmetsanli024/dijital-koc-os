@@ -12,7 +12,7 @@ export async function POST(req: Request) {
     
     if (targetAudience === 'parent') {
       prompt = `
-        Sen profesyonel bir Eğitim Koçu ve Psikolojik Danışmansın.
+        Sen profesyonel bir Rehber Öğretmen ve Psikolojik Danışmansın.
         Öğrencimiz ${studentName} ile yapılan son koçluk seansının verilerini inceleyerek VELİSİNE WhatsApp üzerinden gönderilecek bir durum bilgilendirme mesajı hazırla.
         
         Seans Verileri:
@@ -31,7 +31,7 @@ export async function POST(req: Request) {
     } else {
       // principal
       prompt = `
-        Sen kurumsal bir Eğitim Koçu ve Rehber Öğretmensin.
+        Sen kurumsal bir Rehber Öğretmen ve Rehber Öğretmensin.
         Kurum müdürüne/yönetime sunulmak üzere, ${studentName} isimli öğrencinin seans özetini içeren profesyonel bir yönetici özeti ("Müdür Raporu") hazırla.
         
         Seans Verileri:

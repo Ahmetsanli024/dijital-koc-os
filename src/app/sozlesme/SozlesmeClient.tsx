@@ -7,7 +7,7 @@ type Settings = { coachName: string; coachTitle: string; phone: string | null; s
 
 export default function SozlesmeClient({ students, settings }: { students: Student[]; settings: Settings }) {
   const coachName  = settings?.coachName  || 'Ahmet ŞANLI';
-  const coachTitle = settings?.coachTitle || 'Eğitim Koçu';
+  const coachTitle = settings?.coachTitle || 'Rehber Öğretmen';
   const sessionFee = settings?.sessionFee || 0;
   const sessionDur = settings?.sessionDuration || 45;
 

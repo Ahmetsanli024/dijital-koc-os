@@ -122,7 +122,7 @@ export default function TercihClient({ students }: { students: Student[] }) {
           ${items.map((item, i) => `<tr><td>${i+1}</td><td>${item.schoolName}</td><td>${item.city}</td><td>${item.baseScore}</td><td>${item.probability}%</td><td class="note">${item.note || ''}</td></tr>`).join('')}
           </table></div>`;
       }).join('')}
-      <div class="footer">Ahmet ŞANLI — Eğitim Koçu · Bu rapor koçluk danışmanlığı kapsamında hazırlanmıştır.</div>
+      <div class="footer">Ahmet ŞANLI — Rehber Öğretmen · Bu rapor koçluk danışmanlığı kapsamında hazırlanmıştır.</div>
       <script>window.onload=()=>window.print()</script>
       </body></html>`;
     const w = window.open('', '_blank');

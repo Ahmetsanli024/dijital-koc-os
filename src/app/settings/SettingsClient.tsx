@@ -75,7 +75,7 @@ export default function SettingsClient({ initial }: { initial: Form }) {
 
       <Section title="Koç Kimlik Bilgileri" icon="👤">
         <Field label="Ad Soyad *" name="coachName" placeholder="Ahmet ŞANLI" hint="Belgelerde ve raporlarda görünür" />
-        <Field label="Unvan *" name="coachTitle" placeholder="Eğitim Koçu" hint="İmza bölümünde kullanılır" />
+        <Field label="Unvan *" name="coachTitle" placeholder="Rehber Öğretmen" hint="İmza bölümünde kullanılır" />
         <Field label="Telefon" name="phone" type="tel" placeholder="0555 123 45 67" />
         <Field label="E-posta" name="email" type="email" placeholder="ahmet@kocluk.com" />
       </Section>

@@ -11,7 +11,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Geçerli bir GEMINI_API_KEY bulunamadı.' }, { status: 500 });
     }
 
-    const prompt = `Sen deneyimli bir Eğitim Koçu ve Soru Yazarısın.
+    const prompt = `Sen deneyimli bir Rehber Öğretmen ve Soru Yazarısın.
 Öğrencinin Adı: ${studentName}
 Sınıfı: ${grade}
 Eksik/Zayıf Olduğu Konular: ${weakTopics}

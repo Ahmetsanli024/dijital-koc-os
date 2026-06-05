@@ -41,7 +41,7 @@ export async function GET(req: Request) {
     let aiSuggestion = '';
     if (process.env.GEMINI_API_KEY && lastExam) {
       try {
-        const prompt = `Türk eğitim koçusun. Kısa ve net bir seans başlangıç önerisi ver.
+        const prompt = `Türk rehber öğretmensun. Kısa ve net bir seans başlangıç önerisi ver.
 Öğrenci: ${student.firstName} ${student.lastName} / ${student.grade}
 Son sınav neti: ${lastExam.totalNet} (${netTrend !== null ? (netTrend > 0 ? '+' : '') + netTrend + ' değişim' : 'ilk sınav'})
 Program tamamlama: ${programPct !== null ? '%' + programPct : 'program yok'}

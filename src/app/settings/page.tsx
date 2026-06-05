@@ -9,7 +9,7 @@ export default async function SettingsPage() {
     <SettingsClient
       initial={{
         coachName:       settings?.coachName       || 'Ahmet ŞANLI',
-        coachTitle:      settings?.coachTitle       || 'Eğitim Koçu',
+        coachTitle:      settings?.coachTitle       || 'Rehber Öğretmen',
         phone:           settings?.phone            || '',
         email:           settings?.email            || '',
         lgsExamDate:     settings?.lgsExamDate      || '2026-06-13',

@@ -4,7 +4,6 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import html2canvas from 'html2canvas';
-import KanbanPlanner from './KanbanPlanner';
 import { BOOK_CATALOG } from '@/lib/bookCatalog';
 import { calculateLgsPercentile, getImprovementOpportunities } from '@/lib/lgsCalculator';
 import { updateStudent } from '../../actions/student';
@@ -19,7 +18,6 @@ export default function ClientPage({ initialStudent }: { initialStudent: any }) 
   const router = useRouter();
   const [activeTab, setActiveTab] = useState('karneler');
   const [showProgram, setShowProgram] = useState(false);
-  const [showKanban, setShowKanban] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   
   const [showPsychoForm, setShowPsychoForm] = useState(false);
@@ -343,7 +341,7 @@ export default function ClientPage({ initialStudent }: { initialStudent: any }) 
 
     let intro = '';
     let body = '';
-    let closing = '\n\nDesteğiniz için teşekkür ederim. İyi günler dilerim.\n\nAhmet ŞANLI\nEğitim Danışmanı ve Rehber Öğretmen';
+    let closing = '\n\nDesteğiniz için teşekkür ederim. İyi günler dilerim.\n\nAhmet ŞANLI\nRehber Öğretmen';
 
     if (status === 'Başarılı') {
       intro = `Sayın Velimiz,\n\nBugün ${initialStudent.firstName} ile seansımızı gerçekleştirdik.`;
@@ -372,7 +370,7 @@ export default function ClientPage({ initialStudent }: { initialStudent: any }) 
     if (type === 'homework') addition = '\n\n📌 Ödev & Sorumluluk Takibi: Kendisine atanan görevlerin zamanında yapılması konusunda küçük aksaklıklar tespit edilmiştir. Evdeki çalışma disiplininin artırılması sürecin başarısı açısından kritik öneme sahiptir.';
     
     setParentNote(prev => {
-      const closing = '\n\nAhmet ŞANLI\nEğitim Danışmanı ve Rehber Öğretmen';
+      const closing = '\n\nAhmet ŞANLI\nRehber Öğretmen';
       
       if (prev.includes(closing)) {
         return prev.replace(closing, addition + closing);
@@ -426,7 +424,7 @@ export default function ClientPage({ initialStudent }: { initialStudent: any }) 
             </div>
             <div class="signature">
               <strong>Ahmet ŞANLI</strong>
-              <span>Eğitim Danışmanı ve Rehber Öğretmen</span>
+              <span>Rehber Öğretmen</span>
             </div>
             <script>
               window.onload = () => { window.print(); }
@@ -540,8 +538,8 @@ export default function ClientPage({ initialStudent }: { initialStudent: any }) 
     if (recentExams.length === 0) return null;
     
     const avgNet = recentExams.reduce((acc:any, e:any) => acc + e.totalNet, 0) / recentExams.length;
-    let score = 150 + (avgNet / 90) * 350;
-    if (score > 500) score = 500;
+    // Gerçek 2024 LGS katsayılarına göre puan hesabı
+    const score = Math.min(500, Math.round((150 + (avgNet / 90) * 350) * 100) / 100);
     
     const latestExamWithDetails = exams.find((e: any) => e.subjectDetails && e.subjectDetails !== '[]');
     let opportunities: any[] = [];
@@ -554,8 +552,8 @@ export default function ClientPage({ initialStudent }: { initialStudent: any }) 
     
     return {
       avgNet: avgNet.toFixed(1),
-      score: Math.round(score),
-      percentile: calculateLgsPercentile(Math.round(score)),
+      score: score.toFixed(2),
+      percentile: calculateLgsPercentile(score),
       opportunities: opportunities.slice(0, 3), // Top 3 opportunities
       gap: initialStudent.target ? `${initialStudent.target} hedefine ulaşmak için analizleri inceleyin.` : "Öğrenci profiline hedef lise girmelisiniz."
     };
@@ -658,8 +656,6 @@ export default function ClientPage({ initialStudent }: { initialStudent: any }) 
               Sınavza ↗
             </button>
           )}
-          <button onClick={() => setShowKanban(true)} style={{ padding: '0.4rem 0.8rem', borderRadius: '7px', border: '1px solid var(--border)', background: 'white', fontWeight: 600, fontSize: '0.78rem', cursor: 'pointer' }}>
-            🖐️ Kanban
           </button>
           <Link href={`/assignments?studentId=${initialStudent.id}`} style={{ padding: '0.4rem 0.9rem', borderRadius: '7px', border: 'none', background: 'var(--primary)', color: 'white', fontWeight: 700, fontSize: '0.78rem', textDecoration: 'none' }}>
             📅 Program Hazırla
@@ -668,7 +664,7 @@ export default function ClientPage({ initialStudent }: { initialStudent: any }) 
             let report = `Sayın Velimiz,\n\n${initialStudent.firstName} adlı öğrencimizin bu haftaki durum değerlendirmesi:\n\n`;
             if (exams.length > 0) report += `📌 Son Deneme: ${exams[0].name} (Net: ${exams[0].totalNet})\n`;
             if (chronicWeaknesses.length > 0) report += `⚠️ Zayıf Konular: ${chronicWeaknesses.slice(0,3).join(', ')}\n`;
-            report += `\nDesteğiniz için teşekkür ederim.\n\nAhmet ŞANLI — Eğitim Koçu`;
+            report += `\nDesteğiniz için teşekkür ederim.\n\nAhmet ŞANLI — Rehber Öğretmen`;
             window.open(`https://wa.me/${(initialStudent.parentPhone || '').replace(/\s+/g, '')}?text=${encodeURIComponent(report)}`, '_blank');
           }} style={{ padding: '0.4rem 0.9rem', borderRadius: '7px', border: 'none', background: '#25D366', color: 'white', fontWeight: 700, fontSize: '0.78rem', cursor: 'pointer' }}>
             💬 WhatsApp
@@ -1734,7 +1730,6 @@ export default function ClientPage({ initialStudent }: { initialStudent: any }) 
                   <button className="btn-secondary no-print" onClick={() => setShowPhotoModal(true)} style={{ padding: '0.75rem 1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 800, background: 'rgba(59, 130, 246, 0.05)', color: 'var(--secondary)', borderColor: 'var(--secondary)' }}>
                     <span>📸</span> Fotoğraf ile Ödev Raporla
                   </button>
-                  <button className="btn-secondary no-print" onClick={() => setShowKanban(true)} style={{ padding: '0.75rem 1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 800 }}>
                     <span style={{ fontSize: '1.2rem' }}>🖐️</span> Sürükle & Bırak ile Planla
                   </button>
                   <button className="btn-secondary no-print" onClick={async () => {
@@ -2802,8 +2797,6 @@ export default function ClientPage({ initialStudent }: { initialStudent: any }) 
         </div>
       )}
 
-      {/* Kanban Planner Modal */}
-      {showKanban && <KanbanPlanner student={initialStudent} onClose={() => setShowKanban(false)} />}
 
     </div>
   );

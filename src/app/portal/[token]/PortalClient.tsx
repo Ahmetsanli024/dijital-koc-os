@@ -262,7 +262,7 @@ export default function PortalClient({ student }: { student: any }) {
               <p style={{ fontSize: '0.88rem', color: '#374151', lineHeight: 1.65, fontStyle: 'italic' }}>
                 {student.notes || quote}
               </p>
-              <div style={{ marginTop: '0.6rem', fontSize: '0.72rem', color: '#94A3B8', fontWeight: 600 }}>— Ahmet ŞANLI, Eğitim Koçu</div>
+              <div style={{ marginTop: '0.6rem', fontSize: '0.72rem', color: '#94A3B8', fontWeight: 600 }}>— Ahmet ŞANLI, Rehber Öğretmen</div>
             </div>
 
             {/* Rozetler */}

@@ -1,6 +1,7 @@
 'use client';
 import React, { useState, useTransition } from 'react';
 import { createSessionNote, deleteSessionNote, createAppointment } from '../actions/session';
+import ExcelImport from '../components/ExcelImport';
 
 type Student = { id: string; firstName: string; lastName: string; grade: string };
 type SessionNote = {
@@ -39,7 +40,7 @@ export default function SessionClient({
 }) {
   const [sessions, setSessions] = useState<SessionNote[]>(initialSessions);
   const [isPending, startTransition] = useTransition();
-  const [activeView, setActiveView] = useState<'new' | 'list' | 'appt' | 'meeting'>('list');
+  const [activeView, setActiveView] = useState<'new' | 'list' | 'appt' | 'meeting' | 'excel'>('list');
   const [filterStudent, setFilterStudent] = useState('');
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null);
@@ -171,6 +172,10 @@ export default function SessionClient({
             className="btn-secondary" style={{ padding: '0.65rem 1.2rem', fontWeight: 700, fontSize: '0.9rem', color: '#D97706', borderColor: '#D97706' }}>
             📋 Toplantı Tutanağı
           </button>
+          <button onClick={() => setActiveView(v => v === 'excel' ? 'list' : 'excel')}
+            className="btn-secondary" style={{ padding: '0.65rem 1.2rem', fontWeight: 700, fontSize: '0.9rem', color: '#059669', borderColor: '#059669' }}>
+            📊 Excel'den Aktar
+          </button>
           <button onClick={() => setActiveView(v => v === 'new' ? 'list' : 'new')}
             className="btn-primary" style={{ padding: '0.65rem 1.2rem', fontWeight: 700, fontSize: '0.9rem' }}>
             {activeView === 'new' ? '← Geri' : '+ Seans Notu'}
@@ -216,6 +221,11 @@ export default function SessionClient({
             </button>
           </div>
         </div>
+      )}
+
+      {/* ── EXCEL AKTARIM ────────────────────────────── */}
+      {activeView === 'excel' && (
+        <ExcelImport students={students} onImported={(n) => { showToast(`✅ ${n} seans aktarıldı!`); setActiveView('list'); }} />
       )}
 
       {/* ── TOPLANTI TUTANAĞI FORMU ──────────────────── */}
@@ -464,7 +474,7 @@ function MeetingNoteForm({ students, onClose, showToast }: { students: any[]; on
     <div class="section"><div class="label">Alınan Kararlar</div><div class="value">${form.decisions||'—'}</div></div>
     <div class="section"><div class="label">Veliye Verilen Görevler</div><div class="value">${form.parentTasks||'—'}</div></div>
     ${form.nextMeeting?`<div class="section"><div class="label">Bir Sonraki Toplantı</div><div class="value">${new Date(form.nextMeeting).toLocaleDateString('tr-TR')}</div></div>`:''}
-    <div class="footer"><div>Ahmet ŞANLI — Eğitim Koçu</div><div>Toplantı tarihi: ${new Date().toLocaleDateString('tr-TR')}</div></div>
+    <div class="footer"><div>Ahmet ŞANLI — Rehber Öğretmen</div><div>Toplantı tarihi: ${new Date().toLocaleDateString('tr-TR')}</div></div>
     <script>window.onload=()=>window.print()</script></body></html>`);
     w.document.close();
   };

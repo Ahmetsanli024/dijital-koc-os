@@ -13,15 +13,15 @@ const TEMPLATES = [
     items: [
       {
         title: 'Haftalık Durum Özeti',
-        content: `Sayın {{veli_adı}},\n\nBu hafta {{öğrenci_adı}} ile koçluk seansımızı gerçekleştirdik. {{öğrenci_adı}} öğrencimiz son denemede {{net}} net yapmıştır. Genel gidişat plana uygun seyrediyor; belirlediğimiz hedeflere yönelik programı titizlikle takip ediyoruz.\n\nEvde çalışma disiplinini koruması bu süreçte büyük önem taşımaktadır. Herhangi bir soru için ulaşabilirsiniz.\n\nSaygılarımla,\nAhmet ŞANLI — Eğitim Koçu`,
+        content: `Sayın {{veli_adı}},\n\nBu hafta {{öğrenci_adı}} ile koçluk seansımızı gerçekleştirdik. {{öğrenci_adı}} öğrencimiz son denemede {{net}} net yapmıştır. Genel gidişat plana uygun seyrediyor; belirlediğimiz hedeflere yönelik programı titizlikle takip ediyoruz.\n\nEvde çalışma disiplinini koruması bu süreçte büyük önem taşımaktadır. Herhangi bir soru için ulaşabilirsiniz.\n\nSaygılarımla,\nAhmet ŞANLI — Rehber Öğretmen`,
       },
       {
         title: 'Sınav Analizi Bildirimi',
-        content: `Sayın {{veli_adı}},\n\n{{öğrenci_adı}}'nin son deneme sınavı sonuçlarını birlikte değerlendirdik. Sınav neti: {{net}}.\n\nBu sonuçlar doğrultusunda önümüzdeki hafta için kişiye özel çalışma programı güncellendi. Zayıf konuların pekiştirilmesi için düzenli ve odaklı çalışma kritik önem taşımaktadır.\n\nSaygılarımla,\nAhmet ŞANLI — Eğitim Koçu`,
+        content: `Sayın {{veli_adı}},\n\n{{öğrenci_adı}}'nin son deneme sınavı sonuçlarını birlikte değerlendirdik. Sınav neti: {{net}}.\n\nBu sonuçlar doğrultusunda önümüzdeki hafta için kişiye özel çalışma programı güncellendi. Zayıf konuların pekiştirilmesi için düzenli ve odaklı çalışma kritik önem taşımaktadır.\n\nSaygılarımla,\nAhmet ŞANLI — Rehber Öğretmen`,
       },
       {
         title: 'Program Güncellemesi',
-        content: `Sayın {{veli_adı}},\n\n{{öğrenci_adı}}'nin bireysel gelişim programı güncellenmiştir. Mevcut performans analizi doğrultusunda optimize edilmiş yeni program uygulamaya alındı.\n\nGünlük hedeflerin takip edilmesi büyük önem taşımaktadır. Herhangi bir aksaklık durumunda lütfen benimle iletişime geçin.\n\nSaygılarımla,\nAhmet ŞANLI — Eğitim Koçu`,
+        content: `Sayın {{veli_adı}},\n\n{{öğrenci_adı}}'nin bireysel gelişim programı güncellenmiştir. Mevcut performans analizi doğrultusunda optimize edilmiş yeni program uygulamaya alındı.\n\nGünlük hedeflerin takip edilmesi büyük önem taşımaktadır. Herhangi bir aksaklık durumunda lütfen benimle iletişime geçin.\n\nSaygılarımla,\nAhmet ŞANLI — Rehber Öğretmen`,
       },
     ],
   },
@@ -51,7 +51,7 @@ const TEMPLATES = [
     items: [
       {
         title: 'Standart Seans Özeti',
-        content: `Sayın {{veli_adı}},\n\nBugün {{öğrenci_adı}} ile koçluk seansımızı tamamladık.\n\n📌 Bugün işlenenler: [Konu/Ders]\n✅ Alınan kararlar: [Kararlar]\n📅 Bir sonraki seans: [Tarih/Saat]\n\nSaygılarımla,\nAhmet ŞANLI — Eğitim Koçu`,
+        content: `Sayın {{veli_adı}},\n\nBugün {{öğrenci_adı}} ile koçluk seansımızı tamamladık.\n\n📌 Bugün işlenenler: [Konu/Ders]\n✅ Alınan kararlar: [Kararlar]\n📅 Bir sonraki seans: [Tarih/Saat]\n\nSaygılarımla,\nAhmet ŞANLI — Rehber Öğretmen`,
       },
       {
         title: 'Motivasyon Odaklı Seans',
@@ -66,11 +66,11 @@ const TEMPLATES = [
     items: [
       {
         title: 'Başarılı Sınav Tebriği',
-        content: `Sayın {{veli_adı}},\n\n{{öğrenci_adı}} son denemesinde {{net}} net ile harika bir performans sergiledi! Bu başarı, disiplinli çalışmanın ve aile desteğinin sonucudur.\n\nTebrikler!\n\nAhmet ŞANLI — Eğitim Koçu`,
+        content: `Sayın {{veli_adı}},\n\n{{öğrenci_adı}} son denemesinde {{net}} net ile harika bir performans sergiledi! Bu başarı, disiplinli çalışmanın ve aile desteğinin sonucudur.\n\nTebrikler!\n\nAhmet ŞANLI — Rehber Öğretmen`,
       },
       {
         title: 'Program Tamamlama Tebriği',
-        content: `Sayın {{veli_adı}},\n\n{{öğrenci_adı}} bu haftaki programını eksiksiz tamamladı! Bu disiplin ve azim, hedeflere ulaşmanın temel taşıdır.\n\nBu başarıyı birlikte kutlayalım!\n\nAhmet ŞANLI — Eğitim Koçu`,
+        content: `Sayın {{veli_adı}},\n\n{{öğrenci_adı}} bu haftaki programını eksiksiz tamamladı! Bu disiplin ve azim, hedeflere ulaşmanın temel taşıdır.\n\nBu başarıyı birlikte kutlayalım!\n\nAhmet ŞANLI — Rehber Öğretmen`,
       },
     ],
   },
@@ -96,7 +96,7 @@ const TEMPLATES = [
     items: [
       {
         title: 'LGS Son Sprint Bildirimi',
-        content: `Sayın {{veli_adı}},\n\n{{öğrenci_adı}} ile LGS'ye yönelik son sprint planını oluşturduk. Kalan sürede yoğunluğu artırırken stresi minimize edecek bir denge kurmayı hedefliyoruz.\n\nSınav günü saatinde uyanma ve beslenme düzenine özellikle dikkat edilmesini rica ederim.\n\nSaygılarımla,\nAhmet ŞANLI — Eğitim Koçu`,
+        content: `Sayın {{veli_adı}},\n\n{{öğrenci_adı}} ile LGS'ye yönelik son sprint planını oluşturduk. Kalan sürede yoğunluğu artırırken stresi minimize edecek bir denge kurmayı hedefliyoruz.\n\nSınav günü saatinde uyanma ve beslenme düzenine özellikle dikkat edilmesini rica ederim.\n\nSaygılarımla,\nAhmet ŞANLI — Rehber Öğretmen`,
       },
       {
         title: 'Sınav Günü Sabahı',

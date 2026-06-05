@@ -23,7 +23,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   ]);
 
   const coachName  = settings?.coachName  || 'Koç';
-  const coachTitle = settings?.coachTitle || 'Eğitim Koçu';
+  const coachTitle = settings?.coachTitle || 'Rehber Öğretmen';
   // İsimden kısaltma: "Ahmet ŞANLI" → "AŞ"
   const initials = coachName.split(' ').map((w: string) => w[0]).join('').substring(0, 2).toUpperCase();
 
