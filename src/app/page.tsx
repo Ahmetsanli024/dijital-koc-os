@@ -39,6 +39,39 @@ export default async function Home() {
   const lgsDate  = new Date(lgsDateStr + 'T00:00:00');
   const lgsDays  = Math.ceil((lgsDate.getTime() - today.getTime()) / 86_400_000);
 
+  // ── Bugünkü seanslar ─────────────────────────────────────────
+  const todayAppts = students
+    .flatMap(s => s.appointments
+      .filter(a => {
+        const d = new Date(a.date);
+        return d.getDate() === today.getDate() && d.getMonth() === today.getMonth() && d.getFullYear() === today.getFullYear();
+      })
+      .map(a => ({ ...a, student: s }))
+    )
+    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+  // ── Risk sinyalleri ──────────────────────────────────────────
+  const psychoAlerts = students.filter(s => {
+    if (!s.psychoRecords.length) return false;
+    const r = s.psychoRecords[0];
+    return r.anxietyLevel > 7 || r.motivationLevel < 4;
+  });
+
+  const performanceAlerts = students.filter(s =>
+    s.exams.length >= 2 && s.exams[0].totalNet < s.exams[1].totalNet - 5
+  );
+
+  const inactiveStudents = students.filter(s => {
+    if (!s.sessions.length) return true;
+    const last = new Date(s.sessions[0].date);
+    return (today.getTime() - last.getTime()) / 86_400_000 > 10;
+  });
+
+  const communicationAlerts = students.filter(s => {
+    if (!s.parentComms.length) return true;
+    return (today.getTime() - new Date(s.parentComms[0].date).getTime()) / 86_400_000 > 14;
+  });
+
   // ── Otomatik Koç Görevleri ───────────────────────────────────
   const autoTasks: AutoTask[] = [];
 
@@ -91,38 +124,6 @@ export default async function Home() {
     .filter(s => s.exams.length >= 2)
     .sort((a, b) => (b.exams[0].totalNet - b.exams[1].totalNet) - (a.exams[0].totalNet - a.exams[1].totalNet))[0] || null;
 
-  // ── Bugünkü seanslar ─────────────────────────────────────────
-  const todayAppts = students
-    .flatMap(s => s.appointments
-      .filter(a => {
-        const d = new Date(a.date);
-        return d.getDate() === today.getDate() && d.getMonth() === today.getMonth() && d.getFullYear() === today.getFullYear();
-      })
-      .map(a => ({ ...a, student: s }))
-    )
-    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-
-  // ── Risk sinyalleri ──────────────────────────────────────────
-  const psychoAlerts = students.filter(s => {
-    if (!s.psychoRecords.length) return false;
-    const r = s.psychoRecords[0];
-    return r.anxietyLevel > 7 || r.motivationLevel < 4;
-  });
-
-  const performanceAlerts = students.filter(s =>
-    s.exams.length >= 2 && s.exams[0].totalNet < s.exams[1].totalNet - 5
-  );
-
-  const inactiveStudents = students.filter(s => {
-    if (!s.sessions.length) return true;
-    const last = new Date(s.sessions[0].date);
-    return (today.getTime() - last.getTime()) / 86_400_000 > 10;
-  });
-
-  const communicationAlerts = students.filter(s => {
-    if (!s.parentComms.length) return true;
-    return (today.getTime() - new Date(s.parentComms[0].date).getTime()) / 86_400_000 > 14;
-  });
 
   // ── Program tamamlanma oranı ─────────────────────────────────
   const programStats = students.reduce((acc, s) => {
