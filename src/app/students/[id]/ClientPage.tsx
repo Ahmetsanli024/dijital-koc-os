@@ -656,7 +656,6 @@ export default function ClientPage({ initialStudent }: { initialStudent: any }) 
               Sınavza ↗
             </button>
           )}
-          </button>
           <Link href={`/assignments?studentId=${initialStudent.id}`} style={{ padding: '0.4rem 0.9rem', borderRadius: '7px', border: 'none', background: 'var(--primary)', color: 'white', fontWeight: 700, fontSize: '0.78rem', textDecoration: 'none' }}>
             📅 Program Hazırla
           </Link>

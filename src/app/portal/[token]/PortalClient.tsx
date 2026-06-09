@@ -83,8 +83,6 @@ export default function PortalClient({ student }: { student: any }) {
   const todayTasks  = tasks.filter((t: any) => t.day === todayKey || t.day === todayKey.substring(0,3));
   const todayDone   = todayTasks.filter((t: any) => t.isCompleted).length;
 
-  // Streak (kaç gün üst üste en az 1 görev yapıldı — basit tahmini)
-  const streak = student.badges?.filter((b: any) => b.icon === '🔥').length || 0;
 
   const handleToggle = (taskId: string, current: boolean) => {
     startTransition(async () => {
