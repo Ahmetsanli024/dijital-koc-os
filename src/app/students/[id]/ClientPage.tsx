@@ -1729,8 +1729,7 @@ export default function ClientPage({ initialStudent }: { initialStudent: any }) 
                   <button className="btn-secondary no-print" onClick={() => setShowPhotoModal(true)} style={{ padding: '0.75rem 1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 800, background: 'rgba(59, 130, 246, 0.05)', color: 'var(--secondary)', borderColor: 'var(--secondary)' }}>
                     <span>📸</span> Fotoğraf ile Ödev Raporla
                   </button>
-                    <span style={{ fontSize: '1.2rem' }}>🖐️</span> Sürükle & Bırak ile Planla
-                  </button>
+
                   <button className="btn-secondary no-print" onClick={async () => {
                     setIsGeneratingLetter(true);
                     try {

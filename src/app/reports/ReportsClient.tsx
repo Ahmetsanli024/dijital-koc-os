@@ -363,7 +363,7 @@ export default function ReportsClient({ students }: { students: Student[] }) {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem', marginBottom: '1.25rem' }}>
           {/* Özet Metrik Kartları */}
           {[
-            { label: 'Son Net', value: stats.lastNet || '—', sub: stats.exams?.[0]?.name || '', color: '#2563EB' },
+            { label: 'Son Net', value: stats.lastNet || '—', sub: student.exams?.[0]?.name || '', color: '#2563EB' },
             { label: 'Net Değişimi', value: `${stats.netChange > 0 ? '+' : ''}${stats.netChange.toFixed(1)}`, sub: `${stats.firstNet} → ${stats.lastNet}`, color: stats.netChange > 0 ? '#10B981' : '#EF4444' },
             { label: 'Seans Sayısı', value: stats.sessionCount, sub: 'Toplam yapılan', color: '#7C3AED' },
             { label: 'Program', value: stats.progPct !== null ? `%${stats.progPct}` : '—', sub: 'Tamamlanma oranı', color: '#059669' },
